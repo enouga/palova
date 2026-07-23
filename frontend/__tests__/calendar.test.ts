@@ -10,6 +10,10 @@ import {
   buildAgendaList,
   agendaKindMeta,
   agendaItemClubSlug,
+  agendaItemClub,
+  clubMarker,
+  foreignUpcomingCount,
+  otherClubsHintLabel,
   CalendarEntry,
   addDaysKey,
   frLongLabel,
@@ -468,5 +472,83 @@ describe('frLongLabel / frWeekday', () => {
   it('libellé long français sans passer par un fuseau local', () => {
     expect(frLongLabel('2026-07-10')).toBe('vendredi 10 juillet');
     expect(frWeekday('2026-07-10')).toBe('vendredi');
+  });
+});
+
+describe('clubMarker (distinction des entrées d\'autres clubs)', () => {
+  const CLUB = { slug: 'bordeaux-pala', name: 'Bordeaux Pala', accentColor: '#34b27b' };
+
+  it('hôte club, entrée du club courant → null (carte inchangée)', () => {
+    expect(clubMarker({ ...CLUB, slug: 'padel-arena' }, 'padel-arena')).toBeNull();
+  });
+
+  it('hôte club, entrée d\'un autre club → marqueur à la couleur du club', () => {
+    expect(clubMarker(CLUB, 'padel-arena')).toEqual({ name: 'Bordeaux Pala', accent: '#34b27b' });
+  });
+
+  it('plateforme (localSlug null) → marqueur pour toute entrée, même le club « habituel »', () => {
+    expect(clubMarker(CLUB, null)).toEqual({ name: 'Bordeaux Pala', accent: '#34b27b' });
+  });
+
+  it('accentColor absent du payload (cache, fixtures) → fallback ACCENTS.blue', () => {
+    expect(clubMarker({ slug: 'x', name: 'X Club' }, null)).toEqual({ name: 'X Club', accent: ACCENTS.blue });
+    expect(clubMarker({ slug: 'x', name: 'X Club', accentColor: null }, 'autre')).toEqual({ name: 'X Club', accent: ACCENTS.blue });
+  });
+});
+
+describe('foreignUpcomingCount (ligne « aussi N réservations dans d\'autres clubs »)', () => {
+  const foreignRes = (id: string, over: Partial<MyReservation> = {}) => {
+    const r = makeReservation({ id, ...over });
+    r.resource = { ...r.resource, club: { name: 'Bordeaux Pala', slug: 'bordeaux-pala', timezone: 'Europe/Paris' } };
+    return r;
+  };
+
+  it('compte les entrées À VENIR d\'un autre club, tous types confondus (cours compris)', () => {
+    const count = foreignUpcomingCount(
+      [makeReservation({ id: 'local', startTime: '2026-06-12T16:00:00.000Z', endTime: '2026-06-12T17:00:00.000Z' }), foreignRes('f1', { startTime: '2026-06-12T16:00:00.000Z', endTime: '2026-06-12T17:00:00.000Z' })],
+      [makeRegistration()], [makeEventReg()],
+      [makeLessonEnrollment({ clubSlug: 'club-cours', startTime: '2026-06-15T17:00:00.000Z', endTime: '2026-06-15T18:00:00.000Z' })],
+      'padel-arena', NOW,
+    );
+    // f1 (résa Bordeaux) + cours club-cours ; tournoi/event/résa locale = padel-arena → exclus
+    expect(count).toBe(2);
+  });
+
+  it('exclut les entrées passées et annulées d\'un autre club', () => {
+    const count = foreignUpcomingCount(
+      [
+        foreignRes('past', { startTime: '2026-06-01T10:00:00.000Z', endTime: '2026-06-01T11:00:00.000Z' }),
+        foreignRes('cancelled', { status: 'CANCELLED', startTime: '2026-06-12T16:00:00.000Z', endTime: '2026-06-12T17:00:00.000Z' }),
+      ],
+      [], [], [], 'padel-arena', NOW,
+    );
+    expect(count).toBe(0);
+  });
+});
+
+describe('otherClubsHintLabel', () => {
+  it('accorde singulier / pluriel', () => {
+    expect(otherClubsHintLabel(1)).toBe('Vous avez aussi 1 réservation à venir dans un autre club');
+    expect(otherClubsHintLabel(3)).toBe('Vous avez aussi 3 réservations à venir dans d\'autres clubs');
+  });
+});
+
+describe('agendaItemClub (club d\'un item de liste OU d\'une entrée calendrier)', () => {
+  it('retourne le club des 4 kinds d\'un AgendaListItem, cours compris', () => {
+    const list = buildAgendaList(
+      [makeReservation()], [makeRegistration()], [makeEventReg()], [makeLessonEnrollment({ clubSlug: 'club-cours' })], NOW,
+    );
+    const byKind = Object.fromEntries(list.map((i) => [i.kind, agendaItemClub(i)]));
+    expect(byKind.reservation.slug).toBe('padel-arena');
+    expect(byKind.tournament.slug).toBe('padel-arena');
+    expect(byKind.event.slug).toBe('padel-arena');
+    expect(byKind.lesson).toMatchObject({ slug: 'club-cours', name: 'Padel Arena' });
+  });
+
+  it('accepte aussi une CalendarEntry (union structurelle) et expose accentColor quand présent', () => {
+    const res = makeReservation();
+    (res.resource.club as { accentColor?: string }).accentColor = '#ff7a4d';
+    const [entry] = buildCalendarEntries([res], [], [], [], NOW);
+    expect(agendaItemClub(entry)).toMatchObject({ slug: 'padel-arena', name: 'Padel Arena', accentColor: '#ff7a4d' });
   });
 });

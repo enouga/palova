@@ -1111,6 +1111,14 @@ describe('normalizeClubHouseSections', () => {
     expect(out.find((e) => e.key === 'agenda')).toEqual({ key: 'agenda', visible: true });
   });
 
+  it('offers : visible toujours forcé à true (le contrôle réel vit dans Club.showOffersPublicly)', () => {
+    const out = normalizeClubHouseSections([
+      { key: 'offers', visible: false },
+      { key: 'matches', visible: true },
+    ]) as { key: string; visible: boolean }[];
+    expect(out.find((e) => e.key === 'offers')).toEqual({ key: 'offers', visible: true });
+  });
+
   it('non-tableau ou rien de valide → DbNull (reset)', () => {
     expect(normalizeClubHouseSections(null)).toBe(Prisma.DbNull);
     expect(normalizeClubHouseSections('x')).toBe(Prisma.DbNull);

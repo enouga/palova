@@ -2,8 +2,6 @@ import '../../__mocks__/prisma';
 import { prismaMock } from '../../__mocks__/prisma';
 import request from 'supertest';
 import jwt from 'jsonwebtoken';
-import app from '../../app';
-import { TournamentService } from '../../services/tournament.service';
 
 // Mock StripeService avant tout import de l'app (hoist garanti par jest.mock).
 jest.mock('../../services/stripe.service', () => {
@@ -17,6 +15,17 @@ jest.mock('../../services/stripe.service', () => {
   };
 });
 
+// La route contact-referee délègue à la messagerie : on la stubbe (gardes DM testées chez elle).
+// ⚠️ Ce bloc DOIT rester avant `import app` (comme le mock Stripe ci-dessus) : `import app`
+// charge en cascade `services/moderation.service.ts`, qui importe le vrai MessagingService —
+// la factory de mock doit donc être enregistrée AVANT que ce require ne s'exécute.
+const getOrCreateConversation = jest.fn();
+jest.mock('../../services/messaging.service', () => ({
+  MessagingService: jest.fn().mockImplementation(() => ({ getOrCreateConversation })),
+}));
+
+import app from '../../app';
+import { TournamentService } from '../../services/tournament.service';
 import { StripeService } from '../../services/stripe.service';
 const stripeInstance = new (StripeService as any)();
 const createRegistrationPaymentIntent = stripeInstance.createRegistrationPaymentIntent as jest.Mock;
@@ -31,6 +40,7 @@ const token2 = jwt.sign({ id: 'user-2', email: 'u2@x.fr' }, SECRET, { expiresIn:
 beforeEach(() => {
   createRegistrationPaymentIntent.mockClear();
   createRegistrationSetupIntent.mockClear();
+  getOrCreateConversation.mockClear();
 });
 
 // ---------------------------------------------------------------------------
@@ -281,6 +291,63 @@ describe('POST /api/tournaments/:id/registrations/:regId/confirm-payment', () =>
     expect(res.status).toBe(200);
     expect(spy).toHaveBeenCalledWith('reg-1', { stripePaymentIntentId: 'pi_test_123' });
     expect(res.body.paymentStatus).toBe('PAID');
+    spy.mockRestore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/tournaments/:id/contact-referee
+// ---------------------------------------------------------------------------
+describe('POST /api/tournaments/:id/contact-referee', () => {
+  it('401 sans token', async () => {
+    const res = await request(app).post('/api/tournaments/t1/contact-referee');
+    expect(res.status).toBe(401);
+  });
+
+  it('200 — porte OK → délègue à la messagerie et renvoie la conversation', async () => {
+    const spy = jest.spyOn(TournamentService.prototype, 'assertRefereeContactable')
+      .mockResolvedValue({ refereeUserId: 'u-ref', clubSlug: 'demo' });
+    getOrCreateConversation.mockResolvedValue({ id: 'conv-1', other: { userId: 'u-ref' } });
+
+    const res = await request(app)
+      .post('/api/tournaments/t1/contact-referee')
+      .set('Authorization', `Bearer ${token1}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.id).toBe('conv-1');
+    expect(getOrCreateConversation).toHaveBeenCalledWith('user-1', 'u-ref', 'demo');
+    spy.mockRestore();
+  });
+
+  it('403 NOT_REGISTERED (réservé aux inscrits)', async () => {
+    const spy = jest.spyOn(TournamentService.prototype, 'assertRefereeContactable')
+      .mockRejectedValue(new Error('NOT_REGISTERED'));
+    const res = await request(app)
+      .post('/api/tournaments/t1/contact-referee')
+      .set('Authorization', `Bearer ${token1}`);
+    expect(res.status).toBe(403);
+    expect(getOrCreateConversation).not.toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
+  it('409 REFEREE_NOT_CONTACTABLE', async () => {
+    const spy = jest.spyOn(TournamentService.prototype, 'assertRefereeContactable')
+      .mockRejectedValue(new Error('REFEREE_NOT_CONTACTABLE'));
+    const res = await request(app)
+      .post('/api/tournaments/t1/contact-referee')
+      .set('Authorization', `Bearer ${token1}`);
+    expect(res.status).toBe(409);
+    spy.mockRestore();
+  });
+
+  it('les gardes DM restent souveraines : DM_DISABLED relayé en 409', async () => {
+    const spy = jest.spyOn(TournamentService.prototype, 'assertRefereeContactable')
+      .mockResolvedValue({ refereeUserId: 'u-ref', clubSlug: 'demo' });
+    getOrCreateConversation.mockRejectedValue(new Error('DM_DISABLED'));
+    const res = await request(app)
+      .post('/api/tournaments/t1/contact-referee')
+      .set('Authorization', `Bearer ${token1}`);
+    expect(res.status).toBe(409);
     spy.mockRestore();
   });
 });

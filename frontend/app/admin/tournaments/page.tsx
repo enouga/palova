@@ -217,6 +217,7 @@ export default function AdminTournamentsPage() {
         waitlist={t.waitlistCount}
         chips={[t.entryFee ? `${Number(t.entryFee)} €` : null, t.requirePrepayment ? 'CB en ligne' : null]}
         actions={actions}
+        stackActions
       />
     );
   };
@@ -317,6 +318,7 @@ export default function AdminTournamentsPage() {
         renderCard={renderCard}
         itemKey={(t) => t.id}
         emptyLabel="Aucun tournoi."
+        columns={2}
       />
 
       {/* Panneau inscrits */}

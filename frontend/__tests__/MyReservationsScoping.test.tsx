@@ -81,6 +81,49 @@ describe('Mes réservations — cloisonnement par club', () => {
     expect(screen.getByText('Court Autre')).toBeInTheDocument();
   });
 
+  it('réglage ON : la carte étrangère porte le marqueur club (liseré + chip), la locale non', async () => {
+    mockClubState = { slug: 'padel-arena', club: { name: 'Padel Arena', showOtherClubsReservations: true } };
+    const { container } = render(<ThemeProvider><MyReservationsPage /></ThemeProvider>);
+    fireEvent.click(await screen.findByText(/À venir/));
+    await screen.findByText('Court Autre');
+    const stripes = container.querySelectorAll('[data-club-stripe]');
+    expect(stripes).toHaveLength(1); // seulement l'entrée étrangère
+    expect(stripes[0]).toHaveStyle('background: #5e93da'); // fallback ACCENTS.blue (payload sans accentColor)
+    expect(screen.getByText('autre-club').tagName).toBe('SPAN'); // chip club
+    expect(screen.getByText('padel-arena').tagName).toBe('DIV'); // sous-titre texte de la carte locale intact
+  });
+
+  it('plateforme : toutes les cartes portent le marqueur de leur club', async () => {
+    mockClubState = { slug: null, club: null };
+    const { container } = render(<ThemeProvider><MyReservationsPage /></ThemeProvider>);
+    fireEvent.click(await screen.findByText(/À venir/));
+    await screen.findByText('Court Local');
+    expect(container.querySelectorAll('[data-club-stripe]')).toHaveLength(2);
+  });
+
+  it('réglage OFF : ligne « Vous avez aussi 1 réservation à venir dans un autre club » + lien plateforme', async () => {
+    mockClubState = { slug: 'padel-arena', club: { name: 'Padel Arena', showOtherClubsReservations: false } };
+    render(<ThemeProvider><MyReservationsPage /></ThemeProvider>);
+    expect(await screen.findByText(/Vous avez aussi 1 réservation à venir dans un autre club/)).toBeInTheDocument();
+    const link = screen.getByRole('link', { name: /Tout voir sur Palova/ });
+    // Mon Palova vit à la racine plateforme (plus /me/reservations).
+    expect(link.getAttribute('href')).toMatch(/^https?:\/\/[^/]+\/$/);
+  });
+
+  it('réglage ON : pas de ligne d\'info (les entrées sont déjà visibles)', async () => {
+    mockClubState = { slug: 'padel-arena', club: { name: 'Padel Arena', showOtherClubsReservations: true } };
+    render(<ThemeProvider><MyReservationsPage /></ThemeProvider>);
+    await screen.findByText(/À venir/);
+    expect(screen.queryByText(/Vous avez aussi/)).toBeNull();
+  });
+
+  it('plateforme : pas de ligne d\'info (vue globale)', async () => {
+    mockClubState = { slug: null, club: null };
+    render(<ThemeProvider><MyReservationsPage /></ThemeProvider>);
+    await screen.findByText(/À venir/);
+    expect(screen.queryByText(/Vous avez aussi/)).toBeNull();
+  });
+
   it('club OFF : pas d onglet « Matchs »', async () => {
     mockClubState = { slug: 'padel-arena', club: { name: 'Padel Arena', levelSystemEnabled: false } };
     render(<ThemeProvider><MyReservationsPage /></ThemeProvider>);

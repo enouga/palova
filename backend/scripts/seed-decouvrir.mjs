@@ -168,7 +168,7 @@ async function createTournaments(club, clubSportId, cityKey, cityIdx, males, fem
       data: {
         clubId: club.id, clubSportId, name: `${club.city ?? cityKey} Open ${category} — ${genderLabel}`,
         category, gender, openToWomen: true,
-        description: `${TOUR_TAG} Tournoi de démonstration ${category} (${genderLabel}) pour tester la page Découvrir.`,
+        description: `${TOUR_TAG} Tournoi de démonstration ${category} (${genderLabel}) pour tester la page Où jouer.`,
         startTime, endTime, registrationDeadline,
         maxTeams: maxTeams ?? undefined, entryFee: entryFee != null ? money(entryFee) : undefined,
         status: 'PUBLISHED',

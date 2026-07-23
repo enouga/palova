@@ -10,7 +10,7 @@ import { useClub } from '@/lib/ClubProvider';
 import { Icon, IconName } from './Icon';
 
 // ── LogoBall : la balle monoligne seule (mark Palova sans wordmark), réutilisée
-//    partout où l'icône seule suffit (ex. icône « Découvrir » du ClubNav).
+//    partout où l'icône seule suffit (ex. icône « Où jouer » du ClubNav).
 //    Couleur par défaut = accent du thème ; halo neon conservé.
 export function LogoBall({ size = 20, color }: { size?: number; color?: string }) {
   const { th } = useTheme();
@@ -148,6 +148,12 @@ export function Chip({ children, tone = 'mute', icon, color }: { children: React
       {icon && <Icon name={icon} size={13} color={t.fg} />}{children}
     </span>
   );
+}
+
+/** Liseré latéral coloré d'une carte (marqueur « autre club », pattern AgendaAdminCard).
+ *  Le parent doit être en position:relative + overflow:hidden (le liseré épouse le borderRadius). */
+export function CardStripe({ color }: { color: string }) {
+  return <span aria-hidden data-club-stripe style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 4, background: color }} />;
 }
 
 export function LiveDot({ size = 8 }: { size?: number }) {

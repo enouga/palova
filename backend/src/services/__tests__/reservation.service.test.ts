@@ -2044,6 +2044,21 @@ describe('ReservationService', () => {
       expect((out[0].resource as any).sport).toEqual({ key: 'padel', name: 'Padel' });
     });
 
+    it('demande accentColor du club et le laisse passer dans le DTO (marqueur multi-clubs)', async () => {
+      const row = baseReservation();
+      (row.resource.club as any).accentColor = '#ff7a4d';
+      prismaMock.reservation.findMany.mockResolvedValue([row] as any);
+      prismaMock.sport.findMany.mockResolvedValue([{ id: 'sport-padel', key: 'padel' }] as any);
+      prismaMock.playerRating.findMany.mockResolvedValue([] as any);
+
+      const out = await service.listUserReservations('user-1');
+
+      expect((out[0].resource.club as any).accentColor).toBe('#ff7a4d');
+      const calls = (prismaMock.reservation.findMany as jest.Mock).mock.calls;
+      const args = calls[calls.length - 1][0] as any;
+      expect(args.include.resource.select.club.select.accentColor).toBe(true);
+    });
+
     it('expose visibility et la fourchette de niveau (partie ouverte)', async () => {
       prismaMock.reservation.findMany.mockResolvedValue([
         { ...baseReservation(), visibility: 'PUBLIC', targetLevelMin: 2, targetLevelMax: 5 },

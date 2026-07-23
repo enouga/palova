@@ -157,6 +157,13 @@ describe('resolveSections', () => {
     const hiddenKiosk = resolveSections([{ key: 'kiosk', visible: false }, { key: 'matches', visible: true }], true);
     expect(hiddenKiosk.order).not.toContain('kiosk');
   });
+
+  it("offers reste TOUJOURS dans l'ordre même avec visible:false stocké (seul showOffersPublicly gate son affichage réel)", () => {
+    const { order } = resolveSections([
+      { key: 'matches', visible: true }, { key: 'offers', visible: false }, { key: 'top', visible: true },
+    ], true);
+    expect(order).toContain('offers');
+  });
 });
 
 describe('hiddenSectionKeys', () => {
@@ -172,6 +179,10 @@ describe('hiddenSectionKeys', () => {
     expect(hidden.has('top')).toBe(true);
     expect(hidden.has('sponsors')).toBe(true);
     expect(hidden.has('matches')).toBe(false);
+  });
+
+  it('offers stocké visible:false → jamais masqué (le drapeau JSON est inerte pour cette clé)', () => {
+    expect(hiddenSectionKeys([{ key: 'offers', visible: false }]).has('offers')).toBe(false);
   });
 });
 
@@ -196,6 +207,11 @@ describe('fullSectionSettings / SECTION_DEFS', () => {
     const full = fullSectionSettings([{ key: 'kiosk', visible: false }, { key: 'matches', visible: true }]);
     expect(full[0]).toEqual({ key: 'kiosk', visible: false });
     expect(full).toHaveLength(7);
+  });
+
+  it("offers stocké visible:false → forcé true dans l'éditeur (le vrai on/off vit dans showOffersPublicly)", () => {
+    const full = fullSectionSettings([{ key: 'offers', visible: false }, { key: 'matches', visible: true }]);
+    expect(full.find((e) => e.key === 'offers')).toEqual({ key: 'offers', visible: true });
   });
 
   it('SECTION_DEFS couvre exactement SECTION_KEYS (sponsors compris)', () => {

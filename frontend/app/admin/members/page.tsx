@@ -149,11 +149,20 @@ export default function AdminMembersPage() {
     if (listRef.current) listRef.current.scrollTop = 0;
     setScrollTop(0);
   }, [debouncedQuery, seg, sort]);
+  // Grille 2 colonnes ≥ 900px (desktop) : la virtualisation pave par RANGÉE (2 membres),
+  // pas par membre — chaque rangée garde la hauteur fixe ROW_STRIDE d'une seule MemberRow.
+  // Repli à 1 colonne quand le panneau de détail (360px) est ouvert : sinon chaque
+  // MemberRow devient trop étroite (nom qui s'enroule sur 2 lignes, chip qui chevauche).
+  const columns = isDesktop && !selectedUserId ? 2 : 1;
   const range = useMemo(
-    () => computeVirtualRange({ itemCount: visible.length, itemHeight: ROW_STRIDE, scrollTop, viewportHeight }),
-    [visible.length, scrollTop, viewportHeight],
+    () => computeVirtualRange({ itemCount: Math.ceil(visible.length / columns), itemHeight: ROW_STRIDE, scrollTop, viewportHeight }),
+    [visible.length, columns, scrollTop, viewportHeight],
   );
-  const rowsToRender = useMemo(() => visible.slice(range.start, range.end), [visible, range.start, range.end]);
+  const rowsToRender = useMemo(() => {
+    const rows: Member[][] = [];
+    for (let r = range.start; r < range.end; r++) rows.push(visible.slice(r * columns, r * columns + columns));
+    return rows;
+  }, [visible, range.start, range.end, columns]);
 
   const selected = useMemo(() => members.find((m) => m.userId === selectedUserId) ?? null, [members, selectedUserId]);
 
@@ -300,14 +309,18 @@ export default function AdminMembersPage() {
                 </div>
               ) : (
                 <div ref={listRef} style={{ maxHeight: LIST_MAX_HEIGHT, overflowY: 'auto' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 8 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {range.paddingTop > 0 && <div style={{ height: range.paddingTop }} />}
-                    {rowsToRender.map((m) => (
-                      <MemberRow key={m.id} m={m} nowMs={nowMs} selected={selectedUserId === m.userId}
-                        onOpen={() => setSelectedUserId(m.userId)}
-                        onNavigate={() => router.push(`/admin/members/${m.userId}`)}
-                        subscriptionContext={seg === 'subs'}
-                        onSubAction={(kind, mm) => setSubAction({ kind, m: mm })} />
+                    {rowsToRender.map((row, i) => (
+                      <div key={range.start + i} style={{ display: 'grid', gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`, gap: 8 }}>
+                        {row.map((m) => (
+                          <MemberRow key={m.id} m={m} nowMs={nowMs} selected={selectedUserId === m.userId}
+                            onOpen={() => setSelectedUserId(m.userId)}
+                            onNavigate={() => router.push(`/admin/members/${m.userId}`)}
+                            subscriptionContext={seg === 'subs'}
+                            onSubAction={(kind, mm) => setSubAction({ kind, m: mm })} />
+                        ))}
+                      </div>
                     ))}
                     {range.paddingBottom > 0 && <div style={{ height: range.paddingBottom }} />}
                   </div>

@@ -245,4 +245,10 @@ describe('DiscoverPage', () => {
     wrap();
     await waitFor(() => expect(getCurrentPosition).toHaveBeenCalled());
   });
+
+  it('un lien « Accueil » ramène vers la page d\'accueil Palova', async () => {
+    wrap();
+    await screen.findAllByRole('link', { name: /Rejoindre la partie/ });
+    expect(screen.getByRole('button', { name: 'Accueil' })).toBeInTheDocument();
+  });
 });

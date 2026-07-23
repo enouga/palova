@@ -19,6 +19,7 @@ import { OpenMatchModals } from '@/components/openmatch/OpenMatchModals';
 import { MatchesFilterBar } from '@/components/openmatch/MatchesFilterBar';
 import { useIsDesktop } from '@/lib/useIsDesktop';
 import { ResultsToRecord } from '@/components/match/ResultsToRecord';
+import { ResultsToConfirm } from '@/components/match/ResultsToConfirm';
 import { MatchAlertSheet } from '@/components/openmatch/MatchAlertSheet';
 import type { MatchAlert } from '@/lib/api';
 
@@ -232,7 +233,10 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
         {!levelEnabled || !token || view === 'parties' ? (
           <>
         {levelEnabled && (
-          <ResultsToRecord token={token} clubSlug={club.slug} />
+          <>
+            <ResultsToConfirm token={token} clubSlug={club.slug} />
+            <ResultsToRecord token={token} clubSlug={club.slug} />
+          </>
         )}
         <div style={{ padding: '18px 20px 0' }}>
           <h1 style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 26, color: th.text, margin: 0, letterSpacing: -0.4 }}>Parties ouvertes</h1>
@@ -315,6 +319,8 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
           </>
         ) : view === 'matchs' ? (
           <>
+            <ResultsToConfirm token={token} clubSlug={club.slug}
+              onChanged={() => api.getMyMatches(token).then(setMyMatches).catch(() => {})} />
             <ResultsToRecord token={token} clubSlug={club.slug}
               onRecorded={() => api.getMyMatches(token).then(setMyMatches).catch(() => {})} />
             <div style={{ padding: '18px 20px 0' }}>

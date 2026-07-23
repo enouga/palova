@@ -19,7 +19,7 @@ import { waitlistPosition } from '@/lib/tournament';
 import StripePaymentStep from '@/components/StripePaymentStep';
 import { CgvGate } from '@/components/CgvGate';
 import { useIsDesktop } from '@/lib/useIsDesktop';
-import { openDm } from '@/lib/messages';
+import { openDm, DM_ERRORS } from '@/lib/messages';
 import { dangerBanner } from '@/lib/theme';
 
 const ERROR_FR: Record<string, string> = {
@@ -35,6 +35,13 @@ const ERROR_FR: Record<string, string> = {
   SEX_REQUIRED: '{who} doit renseigner son sexe dans son profil.',
   GENDER_MISMATCH: "La composition du binôme ne correspond pas à la catégorie du tournoi.",
   ALREADY_REGISTERED: "Un des deux joueurs est déjà inscrit à ce tournoi.",
+  NOT_REGISTERED: 'Réservé aux inscrits du tournoi.',
+  REFEREE_NOT_CONTACTABLE: "Le juge-arbitre n'est pas joignable pour le moment.",
+  TOURNAMENT_NO_REFEREE: "Ce tournoi n'a pas de juge-arbitre désigné.",
+  RATE_LIMITED: 'Trop de nouvelles conversations, réessayez plus tard.',
+  CANNOT_MESSAGE_SELF: 'Vous ne pouvez pas vous écrire à vous-même.',
+  CONVERSATION_NOT_FOUND: "Impossible d'ouvrir cette conversation.",
+  ...DM_ERRORS,
 };
 
 function messageFor(err: unknown): string {
@@ -163,6 +170,18 @@ export function TournamentDetailClient({ id }: { id: string }) {
     finally { setBusy(false); }
   };
 
+  // Contact du J/A : la porte (inscrit + politique) est re-vérifiée serveur ; la conversation
+  // renvoyée porte le userId du J/A (révélé seulement contact autorisé) → openDm + brouillon.
+  const contactReferee = async () => {
+    if (!token || busy) return;
+    setBusy(true); setError(null);
+    try {
+      const conv = await api.contactTournamentReferee(id, token);
+      openDm(conv.other.userId, { isDesktop, navigate: (h) => router.push(h), draft: `Bonjour, à propos du tournoi ${t.name}…` });
+    } catch (e) { setError(messageFor(e)); }
+    finally { setBusy(false); }
+  };
+
   const primaryBtn = { border: 'none', cursor: 'pointer', background: th.accent, color: th.onAccent, borderRadius: 11, padding: '12px 16px', fontFamily: th.fontUI, fontWeight: 700, fontSize: 14.5, opacity: busy ? 0.6 : 1 };
 
   return (
@@ -179,7 +198,8 @@ export function TournamentDetailClient({ id }: { id: string }) {
           <ShareActions item={t} uidPrefix="tournament" bare />
         </div>
 
-        <TournamentHero t={t} now={now} multiSport={clubIsMultiSport(club)} />
+        <TournamentHero t={t} now={now} multiSport={clubIsMultiSport(club)}
+          onContactReferee={token && t.referee?.contactable && myReg ? contactReferee : undefined} />
 
         {/* Description en paragraphe léger — la carte « À propos » pesait une rangée
             entière de chrome pour une ou deux phrases. */}

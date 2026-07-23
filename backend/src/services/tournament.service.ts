@@ -1,4 +1,4 @@
-import { Prisma, TournamentGender, TournamentStatus } from '@prisma/client';
+import { Prisma, RefereeContactPolicy, TournamentGender, TournamentStatus } from '@prisma/client';
 import { reportError } from '../observability/reportError';
 import { prisma } from '../db/prisma';
 import { serializableTx } from '../db/serializable';
@@ -48,6 +48,26 @@ const PUBLIC_TOURNAMENT_SELECT = {
   registrationDeadline: true, maxTeams: true, entryFee: true, requirePrepayment: true,
   status: true, createdAt: true, updatedAt: true,
 } satisfies Prisma.TournamentSelect;
+
+/** Valeurs admises du réglage de contactabilité du J/A (validation du PATCH). */
+const REFEREE_CONTACT_POLICIES: readonly RefereeContactPolicy[] = ['ALWAYS', 'AFTER_DEADLINE', 'NEVER'];
+
+/**
+ * Contactabilité du J/A d'un tournoi par ses inscrits.
+ * Kill-switch d'abord (adhésion ACTIVE + facette, miroir de resolveReferee) : décocher la
+ * facette coupe le contact même si la mission refereeUserId reste posée. Puis la politique
+ * personnelle — AFTER_DEADLINE ne s'ouvre qu'une fois les inscriptions closes.
+ */
+function refereeContactable(
+  m: { status: string; isReferee: boolean; refereeContactPolicy: RefereeContactPolicy } | null | undefined,
+  registrationDeadline: Date,
+  now: Date,
+): boolean {
+  if (!m || m.status !== 'ACTIVE' || !m.isReferee) return false;
+  if (m.refereeContactPolicy === 'NEVER') return false;
+  if (m.refereeContactPolicy === 'AFTER_DEADLINE') return now >= registrationDeadline;
+  return true;
+}
 
 /** Un joueur vu par le juge-arbitre à la table de marque. `userId` volontairement absent. */
 export interface RefereePlayerRow {
@@ -434,6 +454,8 @@ export class TournamentService {
    * Détail public d'un tournoi (DRAFT masqué) + compteurs.
    * Le J/A désigné y est exposé **par son nom seul** (spec §7) : c'est lui qui répond du
    * tournoi, mais son userId reste interne — d'où la projection `{ name }` plutôt que l'objet.
+   * `contactable` est un booléen CALCULÉ (politique perso + clôture + kill-switch facette,
+   * cf. `refereeContactable`) — jamais `refereeUserId`, jamais la relation brute.
    */
   async getById(tournamentId: string) {
     const t = await prisma.tournament.findUnique({
@@ -442,15 +464,21 @@ export class TournamentService {
         ...PUBLIC_TOURNAMENT_SELECT,
         club: { select: { slug: true, name: true, timezone: true } },
         clubSport: { select: { sport: { select: { key: true, name: true } } } },
-        referee: { select: { firstName: true, lastName: true } },
+        // La contactabilité se calcule via la relation (clubMemberships du J/A, filtrée sur
+        // t.clubId en JS) : refereeUserId n'est jamais lu sur ce chemin public.
+        referee: { select: { firstName: true, lastName: true, clubMemberships: { select: { clubId: true, status: true, isReferee: true, refereeContactPolicy: true } } } },
       },
     });
     if (!t || t.status === 'DRAFT') throw new Error('TOURNAMENT_NOT_FOUND');
     const { referee, ...rest } = t;
     const [withCount] = await this.withCounts([rest]);
+    const membership = referee?.clubMemberships.find((m) => m.clubId === t.clubId) ?? null;
     return {
       ...withCount,
-      referee: referee ? { name: `${referee.firstName} ${referee.lastName}`.trim() } : null,
+      referee: referee ? {
+        name: `${referee.firstName} ${referee.lastName}`.trim(),
+        contactable: refereeContactable(membership, t.registrationDeadline, new Date()),
+      } : null,
     };
   }
 
@@ -495,7 +523,7 @@ export class TournamentService {
         tournament: {
           select: {
             ...PUBLIC_TOURNAMENT_SELECT,
-            club: { select: { slug: true, name: true, timezone: true } },
+            club: { select: { slug: true, name: true, timezone: true, accentColor: true } },
             clubSport: { select: { sport: { select: { key: true, name: true } } } },
           },
         },
@@ -812,6 +840,53 @@ export class TournamentService {
       select: { status: true, isReferee: true },
     });
     return !!m && m.status === 'ACTIVE' && m.isReferee;
+  }
+
+  /** Réglage de contactabilité du J/A (par club). Gate resolveReferee posé par la route. */
+  async getRefereeContactPolicy(clubId: string, userId: string) {
+    const m = await prisma.clubMembership.findUnique({
+      where: { userId_clubId: { userId, clubId } },
+      select: { refereeContactPolicy: true },
+    });
+    return { policy: m?.refereeContactPolicy ?? 'AFTER_DEADLINE' };
+  }
+
+  async setRefereeContactPolicy(clubId: string, userId: string, policy: string) {
+    if (!REFEREE_CONTACT_POLICIES.includes(policy as RefereeContactPolicy)) throw new Error('VALIDATION_ERROR');
+    const m = await prisma.clubMembership.update({
+      where: { userId_clubId: { userId, clubId } },
+      data: { refereeContactPolicy: policy as RefereeContactPolicy },
+      select: { refereeContactPolicy: true },
+    });
+    return { policy: m.refereeContactPolicy };
+  }
+
+  /**
+   * Porte du bouton « Contacter le J/A » : inscrit non-annulé (capitaine ou partenaire) +
+   * J/A désigné + politique re-calculée serveur (jamais confiée au client). Renvoie
+   * l'identité à passer à la messagerie — le userId du J/A ne sort d'ici que contact autorisé.
+   */
+  async assertRefereeContactable(tournamentId: string, meId: string): Promise<{ refereeUserId: string; clubSlug: string }> {
+    const t = await prisma.tournament.findUnique({
+      where: { id: tournamentId },
+      select: {
+        status: true, clubId: true, refereeUserId: true, registrationDeadline: true,
+        club: { select: { slug: true } },
+      },
+    });
+    if (!t || t.status === 'DRAFT') throw new Error('TOURNAMENT_NOT_FOUND');
+    const reg = await prisma.tournamentRegistration.findFirst({
+      where: { tournamentId, status: { not: 'CANCELLED' }, OR: [{ captainUserId: meId }, { partnerUserId: meId }] },
+      select: { id: true },
+    });
+    if (!reg) throw new Error('NOT_REGISTERED');
+    if (!t.refereeUserId) throw new Error('TOURNAMENT_NO_REFEREE');
+    const membership = await prisma.clubMembership.findUnique({
+      where: { userId_clubId: { userId: t.refereeUserId, clubId: t.clubId } },
+      select: { status: true, isReferee: true, refereeContactPolicy: true },
+    });
+    if (!refereeContactable(membership, t.registrationDeadline, new Date())) throw new Error('REFEREE_NOT_CONTACTABLE');
+    return { refereeUserId: t.refereeUserId, clubSlug: t.club.slug };
   }
 
   /**

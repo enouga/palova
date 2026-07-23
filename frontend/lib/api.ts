@@ -126,6 +126,7 @@ export const api = {
     request<{ id: string; status: string }>(`/api/reservations/${reservationId}/match`, { method: 'POST', body: JSON.stringify(body) }, token),
   getMyMatches: (token: string) => request<MyMatch[]>('/api/me/matches', {}, token),
   getMatchesToRecord: (token: string) => request<MatchToRecord[]>('/api/me/matches/to-record', {}, token),
+  getMatchesToConfirm: (token: string) => request<MatchToConfirm[]>('/api/me/matches/to-confirm', {}, token),
   confirmMatch: (matchId: string, token: string) =>
     request<{ ok: true }>(`/api/matches/${matchId}/confirm`, { method: 'POST' }, token),
   disputeMatch: (matchId: string, message: string, token: string) =>
@@ -145,6 +146,9 @@ export const api = {
 
   // Adhésions du joueur (clubs dont il est membre + statut abonné).
   getMyMemberships: (token: string) => request<PlayerMembership[]>('/api/me/memberships', {}, token),
+
+  // Portefeuille cross-club (Mon Palova) : abonnements + carnets utilisables, groupés par club.
+  getMyWallet: (token: string) => request<MyWalletEntry[]>('/api/me/wallet', {}, token),
 
   // Auto-inscription du joueur connecté à un club (adhésion automatique, idempotente).
   joinClub: (slug: string, token: string) =>
@@ -1158,6 +1162,14 @@ export const api = {
   refereeRemoveRegistration: (slug: string, tournamentId: string, regId: string, token: string) =>
     request<{ id: string }>(`/api/clubs/${slug}/me/referee/tournaments/${tournamentId}/registrations/${regId}`, { method: 'DELETE' }, token),
 
+  // Réglage de contactabilité du J/A (par club) + porte de contact depuis la fiche tournoi.
+  getRefereeContactPolicy: (slug: string, token: string) =>
+    request<{ policy: RefereeContactPolicy }>(`/api/clubs/${slug}/me/referee/contact-policy`, {}, token),
+  setRefereeContactPolicy: (slug: string, policy: RefereeContactPolicy, token: string) =>
+    request<{ policy: RefereeContactPolicy }>(`/api/clubs/${slug}/me/referee/contact-policy`, { method: 'PATCH', body: JSON.stringify({ policy }) }, token),
+  contactTournamentReferee: (tournamentId: string, token: string) =>
+    request<ConversationSummary>(`/api/tournaments/${tournamentId}/contact-referee`, { method: 'POST' }, token),
+
   // --- Table de marque du J/A ---
   getRefereeMarkTable: (slug: string, tournamentId: string, token: string) =>
     request<MarkTableView>(`/api/clubs/${slug}/me/referee/tournaments/${tournamentId}/mark-table`, {}, token),
@@ -1284,6 +1296,7 @@ export interface ManagedClub {
   slug: string;
   name: string;
   role: 'OWNER' | 'ADMIN' | 'STAFF';
+  accentColor: string;
 }
 
 export interface MyReservation {
@@ -1292,7 +1305,7 @@ export interface MyReservation {
   endTime: string;
   status: 'PENDING' | 'CONFIRMED' | 'CANCELLED';
   totalPrice: string;
-  resource: { id: string; name: string; sport?: { key: string; name: string } | null; club: { name: string; slug: string; timezone: string; playerChangeCutoffHours?: number; cancellationCutoffHours?: number } };
+  resource: { id: string; name: string; sport?: { key: string; name: string } | null; club: { name: string; slug: string; timezone: string; accentColor?: string; playerChangeCutoffHours?: number; cancellationCutoffHours?: number } };
   capacity: number;
   visibility?: 'PRIVATE' | 'PUBLIC';
   competitive?: boolean;
@@ -1363,6 +1376,25 @@ export interface MatchToRecord {
   resourceName: string;
   sport: { key: string; name: string };
   players: MatchToRecordPlayer[];
+}
+
+export interface MatchToConfirmPlayer {
+  userId: string;
+  firstName: string;
+  lastName: string;
+  avatarUrl: string | null;
+  team: 1 | 2;
+}
+
+export interface MatchToConfirm {
+  matchId: string;
+  playedAt: string;
+  sets: [number, number][];
+  competitive: boolean;
+  confirmDeadline: string;
+  club: { slug: string; name: string; timezone: string };
+  resourceName: string | null;
+  players: MatchToConfirmPlayer[];
 }
 
 export interface ClubMatchPlayer {
@@ -2141,6 +2173,14 @@ export interface MemberPackage {
 /** Solde actif renvoyé par l'endpoint de masse — porte en plus le userId du joueur. */
 export type ActiveMemberPackage = MemberPackage & { userId: string };
 
+// --- Mon Palova : portefeuille cross-club ---
+export interface MyWalletClub { slug: string; name: string; accentColor: string }
+export interface MyWalletEntry {
+  club: MyWalletClub;
+  subscriptions: Subscription[];
+  packages: MemberPackage[];
+}
+
 export interface MyPaymentMethod {
   brand: string | null;
   last4: string | null;
@@ -2357,7 +2397,7 @@ export interface Tournament {
   description: string | null;
   contactInfo: string | null;
   refereeUserId?: string | null; // J/A désigné (facette, pas un rôle) ; ADMIN uniquement — les lectures publiques ne l'exposent pas
-  referee?: { name: string } | null; // J/A public : nom seul, jamais le userId ; peuplé par le détail (getTournament)
+  referee?: { name: string; contactable?: boolean } | null; // J/A public : nom seul + contactabilité calculée serveur, jamais le userId
   startTime: string;
   endTime: string | null;
   registrationDeadline: string;
@@ -2457,7 +2497,7 @@ export interface MyTournamentRegistration {
   partner: { id: string; firstName: string; lastName: string; email: string; phone: string | null };
   captainLicense: string | null;
   partnerLicense: string | null;
-  tournament: Tournament & { club: { slug: string; name: string; timezone: string } };
+  tournament: Tournament & { club: { slug: string; name: string; timezone: string; accentColor?: string } };
 }
 
 export interface MyProfile {
@@ -2729,7 +2769,7 @@ export interface EventParticipant {
 export interface MyEventRegistration {
   id: string;
   status: RegistrationStatus;
-  event: ClubEvent & { club: { slug: string; name: string; timezone: string } };
+  event: ClubEvent & { club: { slug: string; name: string; timezone: string; accentColor?: string } };
 }
 
 export interface AdminEventRegistration {
@@ -3010,7 +3050,7 @@ export interface LessonEnrollmentRecord {
 
 /** Shape retournée par /api/me/lessons : LessonSummary enrichie du club (pour dayKey tz-aware). */
 export type MyLessonSummary = LessonSummary & {
-  club: { slug: string; name: string; timezone: string };
+  club: { slug: string; name: string; timezone: string; accentColor?: string };
 };
 
 export interface MyLessonEnrollment {
@@ -3045,6 +3085,8 @@ export interface CoachLessonRow {
 }
 
 // --- Espace juge-arbitre (Arbitrage) ---
+
+export type RefereeContactPolicy = 'ALWAYS' | 'AFTER_DEADLINE' | 'NEVER';
 
 /** Un joueur vu par le J/A à la table de marque. `userId` volontairement absent côté serveur. */
 export interface RefereePlayerRow {

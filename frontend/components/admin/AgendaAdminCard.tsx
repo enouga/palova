@@ -32,13 +32,17 @@ export interface AgendaAdminCardProps {
   waitlist?: number;          // K en liste d'attente
   chips?: (string | null | undefined)[];
   actions: ReactNode;
+  /** Grille 2 colonnes (page Tournois) : les actions passent sur leur propre ligne pleine
+   * largeur — sinon leur groupe (select J/A + 4 boutons), non compressible (`flexShrink:0`),
+   * déborde du bord de carte au lieu de passer à la ligne dans une colonne à moitié moins large. */
+  stackActions?: boolean;
 }
 
 export function AgendaAdminCard(props: AgendaAdminCardProps) {
   const { th } = useTheme();
   const {
     icon, accent, stripe, faded, tag, title, dateLabel, deadline, now,
-    ratio, full, countLabel, waitlist, chips, actions,
+    ratio, full, countLabel, waitlist, chips, actions, stackActions,
   } = props;
   const countdown = deadline && now ? deadlineCountdown(deadline, now) : null;
   const coralInk = th.danger;
@@ -94,7 +98,9 @@ export function AgendaAdminCard(props: AgendaAdminCardProps) {
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0, alignSelf: 'center', flexWrap: 'wrap', justifyContent: 'flex-end', marginLeft: 'auto' }}>
+      <div style={stackActions
+        ? { display: 'flex', gap: 8, alignItems: 'center', flexBasis: '100%', flexWrap: 'wrap', justifyContent: 'flex-start' }
+        : { display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0, alignSelf: 'center', flexWrap: 'wrap', justifyContent: 'flex-end', marginLeft: 'auto' }}>
         {actions}
       </div>
     </div>

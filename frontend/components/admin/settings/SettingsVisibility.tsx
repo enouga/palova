@@ -13,7 +13,6 @@ export function SettingsVisibility({ club, set }: SettingsTabProps) {
           <SwitchRow checked={club.listedInDirectory} onChange={(v) => set('listedInDirectory', v)} title="Afficher mon club dans l’annuaire public" />
           <SwitchRow checked={club.listTournamentsNationally} onChange={(v) => set('listTournamentsNationally', v)} title="Publier mes tournois dans le calendrier national Palova" />
           <SwitchRow checked={club.listOpenMatchesNationally ?? false} onChange={(v) => set('listOpenMatchesNationally', v)} title="Publier mes parties ouvertes sur palova.fr" />
-          <SwitchRow checked={club.showOffersPublicly} onChange={(v) => set('showOffersPublicly', v)} title="Afficher mes formules (abonnements & carnets) sur le Club-house" />
         </div>
       </div>
 

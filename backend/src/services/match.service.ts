@@ -147,6 +147,47 @@ export class MatchService {
       });
   }
 
+  /**
+   * Matchs PENDING en attente de MA confirmation (= `needsMyConfirmation` de l'historique
+   * complet /api/me/matches), triés par échéance croissante (le plus urgent d'abord). DTO
+   * léger, pensé pour l'alerte proactive — pas l'historique complet.
+   */
+  async listToConfirm(userId: string) {
+    const rows = await prisma.matchPlayer.findMany({
+      where: { userId, confirmation: 'PENDING', match: { status: 'PENDING' } },
+      orderBy: { match: { confirmDeadline: 'asc' } },
+      select: {
+        match: {
+          select: {
+            id: true, playedAt: true, sets: true, competitive: true, confirmDeadline: true,
+            club: { select: { slug: true, name: true, timezone: true } },
+            reservation: { select: { resource: { select: { name: true } } } },
+            players: {
+              select: {
+                userId: true, team: true,
+                user: { select: { firstName: true, lastName: true, avatarUrl: true } },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    return rows.map((r) => ({
+      matchId: r.match.id,
+      playedAt: r.match.playedAt,
+      sets: r.match.sets,
+      competitive: r.match.competitive,
+      confirmDeadline: r.match.confirmDeadline,
+      club: r.match.club,
+      resourceName: r.match.reservation?.resource?.name ?? null,
+      players: r.match.players.map((p) => ({
+        userId: p.userId, team: p.team,
+        firstName: p.user.firstName, lastName: p.user.lastName, avatarUrl: p.user.avatarUrl,
+      })),
+    }));
+  }
+
   /** Exécute un envoi d'email en best-effort : un échec est loggé, jamais propagé. */
   private safeNotify(fn: () => Promise<void>): void {
     Promise.resolve(fn()).catch((err) => reportError(err, { source: 'safeNotify:match' }));

@@ -362,7 +362,7 @@ export class EventService {
       where: { userId, status: { not: 'CANCELLED' } },
       orderBy: { event: { startTime: 'asc' } },
       include: { event: { include: {
-        club: { select: { slug: true, name: true, timezone: true } },
+        club: { select: { slug: true, name: true, timezone: true, accentColor: true } },
         clubSport: { select: { sport: { select: { key: true, name: true } } } },
       } } },
     });

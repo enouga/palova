@@ -69,7 +69,9 @@ const CLUB_HOUSE_SECTION_KEYS = ['kiosk', 'matches', 'agenda', 'top', 'offers', 
  *  adaptatif par défaut). Clé inconnue rejetée, doublon ignoré (1re occurrence gagne),
  *  clés connues manquantes complétées en fin (visibles) — SAUF `kiosk`, ajouté EN TÊTE
  *  quand il manque, pour que les clubs personnalisés avant l'arrivée de la clé gardent le
- *  kiosque en haut. La config stockée est toujours complète.
+ *  kiosque en haut. La config stockée est toujours complète. `offers` est toujours persisté
+ *  visible:true (son affichage réel dépend de `Club.showOffersPublicly`, pas de ce drapeau —
+ *  seule sa position dans l'ordre vient d'ici).
  *  Miroir lecture : frontend/lib/clubhouse.ts (resolveSections). */
 export function normalizeClubHouseSections(input: unknown): Prisma.InputJsonValue | typeof Prisma.DbNull {
   if (!Array.isArray(input)) return Prisma.DbNull;
@@ -80,7 +82,7 @@ export function normalizeClubHouseSections(input: unknown): Prisma.InputJsonValu
     const key = (e as { key?: unknown } | null)?.key;
     if (typeof key !== 'string' || !allowed.has(key) || seen.has(key)) continue;
     seen.add(key);
-    out.push({ key, visible: (e as { visible?: unknown }).visible !== false });
+    out.push({ key, visible: key === 'offers' ? true : (e as { visible?: unknown }).visible !== false });
   }
   if (out.length === 0) return Prisma.DbNull;
   // Kiosque absent (config antérieure à la clé) → en tête, visible : l'ordre historique est préservé.

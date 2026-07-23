@@ -123,6 +123,18 @@ describe('/admin/club', () => {
     await waitFor(() => expect(api.adminUpdateClub).toHaveBeenCalledWith('c1', { clubHouseKioskSeconds: 0 }, 't'));
   });
 
+  it('carte Sections : rangée Offres → case « Vendre en ligne » pilote showOffersPublicly (pas le drapeau JSON)', async () => {
+    (api.adminGetClub as jest.Mock).mockResolvedValueOnce({ clubHouseSections: null, showOffersPublicly: false });
+    wrap();
+    await waitFor(() => expect(screen.getByText('Sections du Club-house')).toBeInTheDocument());
+    const checkbox = screen.getByLabelText('Vendre en ligne') as HTMLInputElement;
+    expect(checkbox.checked).toBe(false);
+    fireEvent.click(checkbox);
+    await waitFor(() => expect(api.adminUpdateClub).toHaveBeenCalledWith('c1', { showOffersPublicly: true }, 't'));
+    // N'a jamais touché clubHouseSections : ce n'est plus le drapeau qui gate cette section.
+    expect((api.adminUpdateClub as jest.Mock).mock.calls[0][1]).not.toHaveProperty('clubHouseSections');
+  });
+
   it('carte Sections : config personnalisée → Réinitialiser → ConfirmDialog → PATCH null', async () => {
     (api.adminGetClub as jest.Mock).mockResolvedValueOnce({ clubHouseSections: [{ key: 'top', visible: false }] });
     wrap();

@@ -413,6 +413,23 @@ describe('TournamentService — admin & lectures', () => {
     expect(reg.tournament.sport).toEqual({ key: 'padel', name: 'Padel' });
   });
 
+  it('listUserRegistrations demande accentColor du club (marqueur multi-clubs)', async () => {
+    prismaMock.tournamentRegistration.findMany.mockResolvedValue([
+      { id: 'r1', captainUserId: 'cap', partnerUserId: 'par',
+        tournament: { clubId: 'club-demo', club: { slug: 'demo', name: 'Demo', timezone: 'Europe/Paris', accentColor: '#5e93da' }, clubSport: null },
+        captain: { id: 'cap', firstName: 'A', lastName: 'A', email: 'a@x', phone: '0600' },
+        partner: { id: 'par', firstName: 'B', lastName: 'B', email: 'b@x', phone: '0601' } },
+    ] as any);
+    prismaMock.clubMembership.findMany.mockResolvedValue([] as any);
+
+    const [reg] = await service.listUserRegistrations('cap');
+
+    expect((reg.tournament.club as any).accentColor).toBe('#5e93da');
+    const calls = (prismaMock.tournamentRegistration.findMany as jest.Mock).mock.calls;
+    const args = calls[calls.length - 1][0] as any;
+    expect(args.include.tournament.select.club.select.accentColor).toBe(true);
+  });
+
   it('listParticipants masque un tournoi DRAFT', async () => {
     prismaMock.tournament.findUnique.mockResolvedValue({ status: 'DRAFT' } as any);
     await expect(service.listParticipants('t1')).rejects.toThrow('TOURNAMENT_NOT_FOUND');
@@ -1212,7 +1229,8 @@ describe('getById — J/A public (nom seul)', () => {
 
   const mockTournament = (referee: unknown) => {
     prismaMock.tournament.findUnique.mockResolvedValue({
-      id: 't1', name: 'Open', status: 'PUBLISHED', referee,
+      id: 't1', clubId: 'club-1', name: 'Open', status: 'PUBLISHED', referee,
+      registrationDeadline: new Date('2099-01-01T00:00:00Z'),
       club: { slug: 'demo', name: 'Demo', timezone: 'Europe/Paris' },
       clubSport: { sport: { key: 'padel', name: 'Padel' } },
     } as any);
@@ -1222,11 +1240,11 @@ describe('getById — J/A public (nom seul)', () => {
   it('expose le nom du J/A désigné, et aucun userId', async () => {
     // `id` volontairement présent dans le mock : si quelqu'un ajoute `id: true` au select du
     // J/A et étale l'objet tel quel, le userId partirait en clair. La projection { name } l'interdit.
-    mockTournament({ id: 'u-referee', firstName: 'Julien', lastName: 'Martin' });
+    mockTournament({ id: 'u-referee', firstName: 'Julien', lastName: 'Martin', clubMemberships: [] });
 
     const dto = await svc.getById('t1');
 
-    expect(dto.referee).toEqual({ name: 'Julien Martin' });
+    expect(dto.referee).toEqual({ name: 'Julien Martin', contactable: false });
     expect(JSON.stringify(dto)).not.toContain('u-referee');
   });
 
@@ -1234,6 +1252,74 @@ describe('getById — J/A public (nom seul)', () => {
     mockTournament(null);
     const dto = await svc.getById('t1');
     expect(dto.referee).toBeNull();
+  });
+});
+
+// La contactabilité est un booléen CALCULÉ serveur : politique du membre + clôture +
+// kill-switch facette (miroir de resolveReferee). La membership du J/A est lue via la
+// relation referee.clubMemberships — refereeUserId n'est jamais lu sur ce chemin public.
+describe('getById — contactabilité du J/A', () => {
+  let svc: TournamentService;
+  beforeEach(() => { jest.clearAllMocks(); svc = new TournamentService(); });
+
+  const FUTURE = '2099-01-01T00:00:00Z', PAST = '2000-01-01T00:00:00Z';
+  const referee = (policy: string, over: Record<string, unknown> = {}) => ({
+    firstName: 'Julien', lastName: 'Martin',
+    clubMemberships: [{ clubId: 'club-1', status: 'ACTIVE', isReferee: true, refereeContactPolicy: policy, ...over }],
+  });
+  const mockT = (ref: unknown, deadline: string) => {
+    prismaMock.tournament.findUnique.mockResolvedValue({
+      id: 't1', clubId: 'club-1', name: 'Open', status: 'PUBLISHED',
+      registrationDeadline: new Date(deadline), referee: ref,
+      club: { slug: 'demo', name: 'Demo', timezone: 'Europe/Paris' },
+      clubSport: { sport: { key: 'padel', name: 'Padel' } },
+    } as any);
+    (prismaMock.tournamentRegistration.groupBy as jest.Mock).mockResolvedValue([] as any);
+  };
+
+  it('ALWAYS → contactable même avant la clôture', async () => {
+    mockT(referee('ALWAYS'), FUTURE);
+    const dto = await svc.getById('t1');
+    expect(dto.referee).toEqual({ name: 'Julien Martin', contactable: true });
+  });
+
+  it('AFTER_DEADLINE avant clôture → non contactable', async () => {
+    mockT(referee('AFTER_DEADLINE'), FUTURE);
+    expect((await svc.getById('t1')).referee?.contactable).toBe(false);
+  });
+
+  it('AFTER_DEADLINE après clôture → contactable', async () => {
+    mockT(referee('AFTER_DEADLINE'), PAST);
+    expect((await svc.getById('t1')).referee?.contactable).toBe(true);
+  });
+
+  it('NEVER → jamais contactable, même clôturé', async () => {
+    mockT(referee('NEVER'), PAST);
+    expect((await svc.getById('t1')).referee?.contactable).toBe(false);
+  });
+
+  it('facette retirée → non contactable (kill-switch, comme resolveReferee)', async () => {
+    mockT(referee('ALWAYS', { isReferee: false }), PAST);
+    expect((await svc.getById('t1')).referee?.contactable).toBe(false);
+  });
+
+  it('adhésion non-ACTIVE → non contactable', async () => {
+    mockT(referee('ALWAYS', { status: 'BLOCKED' }), PAST);
+    expect((await svc.getById('t1')).referee?.contactable).toBe(false);
+  });
+
+  it("la membership d'un AUTRE club ne compte pas", async () => {
+    mockT(referee('ALWAYS', { clubId: 'club-2' }), PAST);
+    expect((await svc.getById('t1')).referee?.contactable).toBe(false);
+  });
+
+  it('ni userId ni memberships ne fuitent dans le payload', async () => {
+    mockT({ id: 'u-referee', ...referee('ALWAYS') }, PAST);
+    const dto = await svc.getById('t1');
+    const json = JSON.stringify(dto);
+    expect(json).not.toContain('u-referee');
+    expect(json).not.toContain('clubMemberships');
+    expect(json).not.toContain('refereeContactPolicy');
   });
 });
 
@@ -1744,5 +1830,116 @@ describe('table de marque — appariement & tardif', () => {
       .mockResolvedValueOnce({ id: 'ub', sex: 'FEMALE', firstName: 'C', lastName: 'D' } as any);
     (prismaMock.clubMembership.findUnique as jest.Mock).mockResolvedValue({ status: 'ACTIVE' } as any);
     await expect(svc.pairFromBench('club-1', 't1', 'ua', 'ub', 'staff-1')).rejects.toThrow('GENDER_MISMATCH');
+  });
+});
+
+// Réglage de contactabilité du J/A (par club, sur ClubMembership — miroir de isReferee).
+describe('réglage de contactabilité du J/A', () => {
+  let svc: TournamentService;
+  beforeEach(() => { jest.clearAllMocks(); svc = new TournamentService(); });
+
+  it('getRefereeContactPolicy lit la colonne du membre', async () => {
+    prismaMock.clubMembership.findUnique.mockResolvedValue({ refereeContactPolicy: 'NEVER' } as any);
+    await expect(svc.getRefereeContactPolicy('club-1', 'u1')).resolves.toEqual({ policy: 'NEVER' });
+    const arg = (prismaMock.clubMembership.findUnique as jest.Mock).mock.calls[0][0];
+    expect(arg.where).toEqual({ userId_clubId: { userId: 'u1', clubId: 'club-1' } });
+  });
+
+  it('getRefereeContactPolicy sans adhésion → défaut AFTER_DEADLINE (jamais un crash)', async () => {
+    prismaMock.clubMembership.findUnique.mockResolvedValue(null as any);
+    await expect(svc.getRefereeContactPolicy('club-1', 'u1')).resolves.toEqual({ policy: 'AFTER_DEADLINE' });
+  });
+
+  it('setRefereeContactPolicy écrit la valeur sur la bonne adhésion', async () => {
+    prismaMock.clubMembership.update.mockResolvedValue({ refereeContactPolicy: 'ALWAYS' } as any);
+    await expect(svc.setRefereeContactPolicy('club-1', 'u1', 'ALWAYS')).resolves.toEqual({ policy: 'ALWAYS' });
+    const arg = (prismaMock.clubMembership.update as jest.Mock).mock.calls[0][0];
+    expect(arg.where).toEqual({ userId_clubId: { userId: 'u1', clubId: 'club-1' } });
+    expect(arg.data).toEqual({ refereeContactPolicy: 'ALWAYS' });
+  });
+
+  it('setRefereeContactPolicy refuse une valeur hors enum', async () => {
+    await expect(svc.setRefereeContactPolicy('club-1', 'u1', 'SOMETIMES')).rejects.toThrow('VALIDATION_ERROR');
+    expect(prismaMock.clubMembership.update).not.toHaveBeenCalled();
+  });
+});
+
+// La porte du bouton « Contacter le J/A » : inscrit non-annulé + J/A désigné + politique
+// re-vérifiée serveur. Le userId du J/A ne sort de cette méthode que contact autorisé.
+describe('assertRefereeContactable — porte du contact J/A', () => {
+  let svc: TournamentService;
+  beforeEach(() => { jest.clearAllMocks(); svc = new TournamentService(); });
+
+  const PAST = new Date('2000-01-01T00:00:00Z'), FUTURE = new Date('2099-01-01T00:00:00Z');
+  const mockT = (over: Record<string, unknown> = {}) => {
+    prismaMock.tournament.findUnique.mockResolvedValue({
+      status: 'PUBLISHED', clubId: 'club-1', refereeUserId: 'u-ref',
+      registrationDeadline: PAST, club: { slug: 'demo' }, ...over,
+    } as any);
+  };
+  const mockReg = (found: boolean) =>
+    prismaMock.tournamentRegistration.findFirst.mockResolvedValue(found ? ({ id: 'r1' } as any) : null);
+  const membership = (over: Record<string, unknown> = {}) =>
+    prismaMock.clubMembership.findUnique.mockResolvedValue({
+      status: 'ACTIVE', isReferee: true, refereeContactPolicy: 'AFTER_DEADLINE', ...over,
+    } as any);
+
+  it('tournoi introuvable → TOURNAMENT_NOT_FOUND', async () => {
+    prismaMock.tournament.findUnique.mockResolvedValue(null as any);
+    await expect(svc.assertRefereeContactable('t1', 'me')).rejects.toThrow('TOURNAMENT_NOT_FOUND');
+  });
+
+  it('tournoi DRAFT → TOURNAMENT_NOT_FOUND (pas de fuite d\'existence)', async () => {
+    mockT({ status: 'DRAFT' });
+    await expect(svc.assertRefereeContactable('t1', 'me')).rejects.toThrow('TOURNAMENT_NOT_FOUND');
+  });
+
+  it('viewer non inscrit → NOT_REGISTERED, la membership n\'est jamais lue', async () => {
+    mockT(); mockReg(false);
+    await expect(svc.assertRefereeContactable('t1', 'me')).rejects.toThrow('NOT_REGISTERED');
+    expect(prismaMock.clubMembership.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('le comptage d\'inscription exclut les annulées et couvre capitaine OU partenaire', async () => {
+    mockT(); mockReg(true); membership();
+    await svc.assertRefereeContactable('t1', 'me');
+    const arg = (prismaMock.tournamentRegistration.findFirst as jest.Mock).mock.calls[0][0];
+    expect(arg.where.status).toEqual({ not: 'CANCELLED' });
+    expect(arg.where.OR).toEqual([{ captainUserId: 'me' }, { partnerUserId: 'me' }]);
+  });
+
+  it('pas de J/A désigné → TOURNAMENT_NO_REFEREE', async () => {
+    mockT({ refereeUserId: null }); mockReg(true);
+    await expect(svc.assertRefereeContactable('t1', 'me')).rejects.toThrow('TOURNAMENT_NO_REFEREE');
+  });
+
+  it('politique NEVER → REFEREE_NOT_CONTACTABLE', async () => {
+    mockT(); mockReg(true); membership({ refereeContactPolicy: 'NEVER' });
+    await expect(svc.assertRefereeContactable('t1', 'me')).rejects.toThrow('REFEREE_NOT_CONTACTABLE');
+  });
+
+  it('AFTER_DEADLINE avant clôture → REFEREE_NOT_CONTACTABLE', async () => {
+    mockT({ registrationDeadline: FUTURE }); mockReg(true); membership();
+    await expect(svc.assertRefereeContactable('t1', 'me')).rejects.toThrow('REFEREE_NOT_CONTACTABLE');
+  });
+
+  it('facette retirée → REFEREE_NOT_CONTACTABLE (kill-switch)', async () => {
+    mockT(); mockReg(true); membership({ isReferee: false });
+    await expect(svc.assertRefereeContactable('t1', 'me')).rejects.toThrow('REFEREE_NOT_CONTACTABLE');
+  });
+
+  it('contact autorisé → renvoie refereeUserId + clubSlug (pour la messagerie)', async () => {
+    mockT(); mockReg(true); membership();
+    await expect(svc.assertRefereeContactable('t1', 'me'))
+      .resolves.toEqual({ refereeUserId: 'u-ref', clubSlug: 'demo' });
+  });
+
+  // La membership consultée doit être celle du J/A (refereeUserId), jamais celle de
+  // l'appelant (meId) — un swap silencieux vérifierait la facette du mauvais joueur.
+  it('interroge la membership du J/A (refereeUserId+clubId), jamais celle de l\'appelant', async () => {
+    mockT(); mockReg(true); membership();
+    await svc.assertRefereeContactable('t1', 'me');
+    const arg = (prismaMock.clubMembership.findUnique as jest.Mock).mock.calls[0][0];
+    expect(arg.where).toEqual({ userId_clubId: { userId: 'u-ref', clubId: 'club-1' } });
   });
 });

@@ -369,6 +369,19 @@ describe('EventService lectures', () => {
     expect(out[0].event.sport).toEqual({ key: 'padel', name: 'Padel' });
     expect((out[0].event as Record<string, unknown>).clubSport).toBeUndefined();
   });
+
+  it('listUserRegistrations demande accentColor du club (marqueur multi-clubs)', async () => {
+    prismaMock.eventRegistration.findMany.mockResolvedValue([
+      { id: 'r1', status: 'CONFIRMED', event: { id: 'e1', club: { slug: 'demo', name: 'Demo', timezone: 'Europe/Paris', accentColor: '#34b27b' }, clubSport: null } },
+    ] as any);
+
+    const out = await service.listUserRegistrations('user-1');
+
+    expect((out[0].event.club as Record<string, unknown>).accentColor).toBe('#34b27b');
+    const calls = (prismaMock.eventRegistration.findMany as jest.Mock).mock.calls;
+    const args = calls[calls.length - 1][0] as any;
+    expect(args.include.event.include.club.select.accentColor).toBe(true);
+  });
 });
 
 describe('EventService admin', () => {

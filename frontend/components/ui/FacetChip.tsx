@@ -4,7 +4,7 @@ import { useTheme } from '@/lib/ThemeProvider';
 import { ACCENTS, inkOn } from '@/lib/theme';
 import { Icon } from '@/components/ui/Icon';
 
-// Chips de filtres partagées (Parties · Events · Tournois national · Découvrir) —
+// Chips de filtres partagées (Parties · Events · Tournois national · Où jouer) —
 // remplace les 3 copies locales qui avaient dérivé (EventsFilterBar, MatchesFilterBar,
 // calendar/FacetPanel). Chaque GROUPE de filtres porte une teinte fixe de la palette
 // (FILTER_TINTS, même libellé ⇒ même teinte sur toutes les pages) : pastille sur le
@@ -12,10 +12,10 @@ import { Icon } from '@/components/ui/Icon';
 // inactive = contour neutre. `lime` jamais utilisé (illisible en clair).
 
 export const FILTER_TINTS = {
-  quand: ACCENTS.emerald,        // « Quand » (Events, calendrier national, Découvrir)
+  quand: ACCENTS.emerald,        // « Quand » (Events, calendrier national, Où jouer)
   categorie: ACCENTS.violet,     // « Catégorie » (Events, calendrier national)
   genre: '#9aa8c2',              // « Genre » (Events, calendrier national) — ardoise, choisie par Eric parmi 6 pistes comparées (cyan trop flashy, rose trop proche du violet, or mat trop sombre, miel/terracotta écartés)
-  niveau: ACCENTS.blue,          // « Niveau » (Parties, Découvrir)
+  niveau: ACCENTS.blue,          // « Niveau » (Parties, Où jouer)
   typePartie: ACCENTS.coral,     // « Type de partie » (Parties)
   source: ACCENTS.apricot,       // « Source » (Events)
   typeAnimation: ACCENTS.blue,   // « Type » (Events, animations)

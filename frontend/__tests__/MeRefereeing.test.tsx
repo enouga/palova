@@ -14,6 +14,8 @@ jest.mock('../lib/api', () => ({
     getRefereeRegistrations: jest.fn(),
     refereePromoteRegistration: jest.fn(),
     refereeRemoveRegistration: jest.fn(),
+    getRefereeContactPolicy: jest.fn(),
+    setRefereeContactPolicy: jest.fn(),
   },
   assetUrl: (u: string | null) => u,
 }));
@@ -47,6 +49,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   (api.getRefereeTournaments as jest.Mock).mockResolvedValue([tournament]);
   (api.getRefereeRegistrations as jest.Mock).mockResolvedValue(regs);
+  (api.getRefereeContactPolicy as jest.Mock).mockResolvedValue({ policy: 'AFTER_DEADLINE' });
 });
 
 it('NOT_A_REFEREE → message dédié, jamais le code d\'erreur brut', async () => {
@@ -139,4 +142,46 @@ it('état vide selon le scope', async () => {
   await screen.findByText('Aucun tournoi à venir.');
   fireEvent.click(screen.getByRole('button', { name: /Passés/i }));
   await screen.findByText('Aucun tournoi passé.');
+});
+
+// Réglage de contactabilité : Segmented 3 états, persistance immédiate optimiste
+// (la page n'a pas d'infrastructure brouillon/SaveBar — pattern ClubHouseSectionsCard).
+describe('réglage de contactabilité', () => {
+  it('affiche le réglage chargé avec ses 3 états', async () => {
+    mount();
+    await screen.findByText('Open de Paris');
+    expect(await screen.findByRole('button', { name: 'Après clôture' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Toujours' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Jamais' })).toBeInTheDocument();
+  });
+
+  it('changer le réglage → PATCH avec la nouvelle valeur', async () => {
+    (api.setRefereeContactPolicy as jest.Mock).mockResolvedValue({ policy: 'NEVER' });
+    mount();
+    await screen.findByText('Open de Paris');
+    fireEvent.click(await screen.findByRole('button', { name: 'Jamais' }));
+    await waitFor(() => expect(api.setRefereeContactPolicy).toHaveBeenCalledWith('demo', 'NEVER', 't'));
+  });
+
+  it('échec du PATCH → revert au réglage serveur + erreur affichée (pas de crash)', async () => {
+    (api.setRefereeContactPolicy as jest.Mock).mockRejectedValue(new Error('VALIDATION_ERROR'));
+    mount();
+    await screen.findByText('Open de Paris');
+    fireEvent.click(await screen.findByRole('button', { name: 'Jamais' }));
+    // Le message ne doit plus exposer le code brut.
+    expect(await screen.findByText(/n'a pas pu être enregistré/i)).toBeInTheDocument();
+    expect(screen.queryByText('VALIDATION_ERROR')).not.toBeInTheDocument();
+    // Le réglage revient à la valeur serveur (le mock getRefereeContactPolicy du beforeEach
+    // continue de résoudre AFTER_DEADLINE) : « Jamais » n'est plus la sélection active.
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Après clôture' })).toHaveAttribute('aria-pressed', 'true'));
+    expect(screen.getByRole('button', { name: 'Jamais' })).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it('pas J/A → pas de bloc Contact', async () => {
+    (api.getRefereeTournaments as jest.Mock).mockRejectedValue(new Error('NOT_A_REFEREE'));
+    (api.getRefereeContactPolicy as jest.Mock).mockRejectedValue(new Error('NOT_A_REFEREE'));
+    mount();
+    await screen.findByText(/réservé aux juges-arbitres/i);
+    expect(screen.queryByRole('button', { name: 'Jamais' })).not.toBeInTheDocument();
+  });
 });

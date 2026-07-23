@@ -327,6 +327,19 @@ describe('PATCH /api/me — preferredSportId', () => {
   });
 });
 
+describe('GET /api/me/clubs', () => {
+  it('expose accentColor par club géré (carte Gestion de Mon Palova, tuile teintée à la marque du club)', async () => {
+    prismaMock.clubMember.findMany.mockResolvedValue([
+      { role: 'OWNER', club: { id: 'club-demo', slug: 'padel-arena-paris', name: 'Padel Arena Paris', accentColor: '#5e93da' } },
+    ] as any);
+    const res = await request(app).get('/api/me/clubs').set('Authorization', `Bearer ${token()}`);
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual([
+      { clubId: 'club-demo', slug: 'padel-arena-paris', name: 'Padel Arena Paris', role: 'OWNER', accentColor: '#5e93da' },
+    ]);
+  });
+});
+
 describe('POST /api/me/password', () => {
   it('refuse sans token (401)', async () => {
     const res = await request(app).post('/api/me/password').send({ currentPassword: 'a', newPassword: 'b' });
@@ -460,6 +473,35 @@ describe('GET /api/me/matches/to-record', () => {
   });
 });
 
+describe('GET /api/me/matches/to-confirm', () => {
+  it('401 sans token', async () => {
+    const res = await request(app).get('/api/me/matches/to-confirm');
+    expect(res.status).toBe(401);
+  });
+
+  it('renvoie la liste des matchs en attente de ma confirmation', async () => {
+    prismaMock.matchPlayer.findMany.mockResolvedValue([{
+      match: {
+        id: 'm1', playedAt: new Date('2026-07-20T18:00:00Z'), sets: [[6, 4], [6, 2]],
+        competitive: true, confirmDeadline: new Date('2026-07-23T18:00:00Z'),
+        club: { slug: 'arena', name: 'Padel Arena', timezone: 'Europe/Paris' },
+        reservation: { resource: { name: 'Court 1' } },
+        players: [
+          { userId: 'u1', team: 1, user: { firstName: 'Lucas', lastName: 'Moreau', avatarUrl: null } },
+          { userId: 'u2', team: 1, user: { firstName: 'Jean', lastName: 'Dupont', avatarUrl: null } },
+          { userId: 'u3', team: 2, user: { firstName: 'Celine', lastName: 'Barbier', avatarUrl: null } },
+          { userId: 'u4', team: 2, user: { firstName: 'Melanie', lastName: 'Bernard', avatarUrl: null } },
+        ],
+      },
+    }] as any);
+    const res = await request(app).get('/api/me/matches/to-confirm').set('Authorization', `Bearer ${token()}`);
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(1);
+    expect(res.body[0].matchId).toBe('m1');
+    expect(res.body[0].players).toHaveLength(4);
+  });
+});
+
 describe('statut légal', () => {
   it('GET /profile expose legal { accepted, current } par document', async () => {
     prismaMock.user.findUnique.mockResolvedValue(PROFILE as any);
@@ -504,5 +546,27 @@ describe('GET /api/me/export', () => {
     jest.spyOn(require('../../services/rateLimit'), 'assertRateLimit').mockRejectedValueOnce(new Error('RATE_LIMITED'));
     const res = await request(app).get('/api/me/export').set('Authorization', `Bearer ${token()}`);
     expect(res.status).toBe(429);
+  });
+});
+
+describe('GET /api/me/wallet', () => {
+  it('401 sans token', async () => {
+    const res = await request(app).get('/api/me/wallet');
+    expect(res.status).toBe(401);
+  });
+
+  it("renvoie l'agrégat cross-club du service", async () => {
+    prismaMock.subscription.findMany.mockResolvedValue([
+      { id: 's1', status: 'ACTIVE', expiresAt: new Date('2027-01-01'), plan: { name: 'Illimité' },
+        club: { slug: 'padel-arena-paris', name: 'Padel Arena Paris', accentColor: '#5e93da' } },
+    ] as any);
+    prismaMock.memberPackage.findMany.mockResolvedValue([] as any);
+
+    const res = await request(app).get('/api/me/wallet').set('Authorization', `Bearer ${token()}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(1);
+    expect(res.body[0].club.slug).toBe('padel-arena-paris');
+    expect(res.body[0].subscriptions).toHaveLength(1);
   });
 });

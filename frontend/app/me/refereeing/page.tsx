@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect, useCallback } from 'react';
-import { api, RefereeTournamentRow, RefereeRegistrationRow } from '@/lib/api';
+import { api, RefereeTournamentRow, RefereeRegistrationRow, RefereeContactPolicy } from '@/lib/api';
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
@@ -15,6 +15,7 @@ import { RefereeTournamentCard } from '@/components/referee/RefereeTournamentCar
 const ERRORS: Record<string, string> = {
   TOURNAMENT_NOT_YOURS: "Vous n'êtes plus juge-arbitre de ce tournoi.",
   TOURNAMENT_NOT_FOUND: 'Ce tournoi est introuvable.',
+  VALIDATION_ERROR: "Ce réglage n'a pas pu être enregistré.",
 };
 const errorLabel = (e: unknown) => ERRORS[(e as Error).message] ?? (e as Error).message;
 
@@ -43,6 +44,26 @@ export default function MeRefereeingPage() {
   // Horloge unique posée au mount : jamais de `new Date()` au rendu (hydration).
   const [now, setNow] = useState<Date | null>(null);
   useEffect(() => { setNow(new Date()); }, []);
+
+  // Réglage de contactabilité (null tant que non chargé → bloc masqué ; un 403 NOT_A_REFEREE
+  // laisse null, cohérent avec l'écran « réservé aux juges-arbitres »).
+  const [policy, setPolicy] = useState<RefereeContactPolicy | null>(null);
+  useEffect(() => {
+    if (!ready || !token || !slug) return;
+    api.getRefereeContactPolicy(slug, token).then((r) => setPolicy(r.policy))
+      .catch((e) => { if ((e as Error).message !== 'NOT_A_REFEREE') setError(errorLabel(e)); });
+  }, [ready, token, slug]);
+
+  const changePolicy = async (next: RefereeContactPolicy) => {
+    if (!token || !slug || policy === null || next === policy) return;
+    setPolicy(next); // optimiste — en cas d'échec on reconverge sur la vérité serveur (pas un
+    // instantané local capturé avant le clic : deux clics rapides en vol se doubleraient sinon).
+    try { await api.setRefereeContactPolicy(slug, next, token); }
+    catch (e) {
+      setError(errorLabel(e));
+      api.getRefereeContactPolicy(slug, token).then((r) => setPolicy(r.policy)).catch(() => {});
+    }
+  };
 
   const load = useCallback(async () => {
     if (!token || !slug) return;
@@ -110,6 +131,16 @@ export default function MeRefereeingPage() {
           <p style={{ fontFamily: th.fontUI, fontSize: 14, color: th.textMute }}>Cet espace est réservé aux juges-arbitres du club.</p>
         ) : (
           <>
+            {policy !== null && (
+              <section aria-label="Contact" style={{ background: th.surface, borderRadius: 14, padding: '12px 14px', boxShadow: th.shadow, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <span style={{ fontFamily: th.fontUI, fontSize: 12, fontWeight: 700, letterSpacing: 0.4, textTransform: 'uppercase', color: th.textFaint }}>Contact</span>
+                <Segmented<RefereeContactPolicy> value={policy} onChange={changePolicy}
+                  options={[{ value: 'ALWAYS', label: 'Toujours' }, { value: 'AFTER_DEADLINE', label: 'Après clôture' }, { value: 'NEVER', label: 'Jamais' }]} />
+                <p style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute, margin: 0, lineHeight: 1.5 }}>
+                  Les inscrits de vos tournois peuvent vous écrire via la messagerie.
+                </p>
+              </section>
+            )}
             <Segmented<'upcoming' | 'past'> value={scope} onChange={setScope}
               options={[{ value: 'upcoming', label: 'À venir' }, { value: 'past', label: 'Passés' }]} />
             {error && <div style={dangerBanner(th)}>{error}</div>}

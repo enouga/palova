@@ -47,7 +47,6 @@ export function buildUpdateBody(c: ClubAdminDetail): UpdateClubBody {
     listedInDirectory: c.listedInDirectory,
     listTournamentsNationally: c.listTournamentsNationally,
     listOpenMatchesNationally: c.listOpenMatchesNationally ?? false,
-    showOffersPublicly: c.showOffersPublicly,
     levelSystemEnabled: c.levelSystemEnabled,
     publicBookingDays: Number(c.publicBookingDays), memberBookingDays: Number(c.memberBookingDays),
     bookingReleaseMode: c.bookingReleaseMode,

@@ -225,7 +225,7 @@ export function ClubNav({ club }: { club: ClubDetail }) {
             <ThemeToggle />
             {/* Icône Palova : point d'entrée vers /decouvrir (clubs, parties, tournois), sur l'hôte
                 plateforme — visible de TOUT visiteur (anonyme compris), aucune condition token. */}
-            <a href={platformUrl('/decouvrir')} aria-label="Palova — découvrir clubs, parties et tournois" title="Palova — découvrir clubs, parties et tournois"
+            <a href={platformUrl('/decouvrir')} aria-label="Palova — où jouer : clubs, parties et tournois" title="Palova — où jouer : clubs, parties et tournois"
               style={{ width: 38, height: 38, borderRadius: '50%', background: th.surface2,
                 display: 'flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none', flexShrink: 0 }}>
               <LogoBall size={20} />

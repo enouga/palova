@@ -99,6 +99,12 @@ export function AgendaHero({ pills, title, subtitle, deadline, now, ratio, count
                 <Icon name={m.icon} size={12} color={HERO_INK_MUTED} style={{ alignSelf: 'center', flexShrink: 0 }} />
                 <span style={{ fontFamily: th.fontUI, fontSize: 10, fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase', color: HERO_INK_MUTED }}>{m.label}</span>
                 <span style={{ fontFamily: th.fontUI, fontSize: 13, fontWeight: 600, color: HERO_INK }}>{m.value}</span>
+                {m.action && (
+                  <button type="button" onClick={m.action.onClick}
+                    style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 700, color: HERO_INK, textDecoration: 'underline', textUnderlineOffset: 2 }}>
+                    {m.action.label}
+                  </button>
+                )}
               </span>
             ))}
           </div>
@@ -112,6 +118,7 @@ export interface MetaCard {
   icon: IconName;
   label: string;
   value: string;
+  action?: { label: string; onClick: () => void }; // petit bouton après la valeur (bande méta du hero seulement)
 }
 
 // Rangée de cartes méta icônées sous le hero (début, clôture, prix, juge-arbitre…).

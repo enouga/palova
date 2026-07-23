@@ -18,7 +18,7 @@ function sessionBridgeUrl(slug: string, to: string, token: string, clubId?: stri
 /** Navigation plateforme → admin d'un club (sous-domaine). En dev (cookie host-only sur
  *  `*.localhost`) le cookie de session ne suit pas le sous-domaine : on passe par le pont.
  *  En prod (`.palova.fr`), le cookie couvre déjà `*.palova.fr` → redirection directe. */
-function goToClubAdmin(slug: string, token: string, clubId?: string | null): void {
+export function goToClubAdmin(slug: string, token: string, clubId?: string | null): void {
   hardNavigate(
     sessionCookieIsHostOnly(currentHost())
       ? sessionBridgeUrl(slug, '/admin', token, clubId)

@@ -44,12 +44,12 @@ enum PaymentMethod {
   TRANSFER
   ONLINE
   OTHER
-  VOUCHER      // ticket CE / chèque vacances / coupon sport ANCV (émetteur en réf.)
-  CHEQUE       // chèque papier
-  CLUB         // « Au club » : encaissement en un clic sans détail du moyen (option club payAtClubOnly)
-  PACK_CREDIT  // consommation d'1 entrée d'un carnet
-  WALLET       // débit du porte-monnaie €
-  MEMBER       // couvert par l'abonnement du membre (pas de flux d'argent)
+  VOUCHER // ticket CE / chèque vacances / coupon sport ANCV (émetteur en réf.)
+  CHEQUE // chèque papier
+  CLUB // « Au club » : encaissement en un clic sans détail du moyen (option club payAtClubOnly)
+  PACK_CREDIT // consommation d'1 entrée d'un carnet
+  WALLET // débit du porte-monnaie €
+  MEMBER // couvert par l'abonnement du membre (pas de flux d'argent)
   SUBSCRIPTION // couverture automatique par un abonnement actif (pas de flux d'argent)
 }
 
@@ -72,8 +72,8 @@ enum PackageKind {
 
 /// Avantage d'un abonnement sur les créneaux couverts.
 enum SubscriptionBenefit {
-  INCLUDED  // créneau gratuit
-  DISCOUNT  // remise en pourcentage
+  INCLUDED // créneau gratuit
+  DISCOUNT // remise en pourcentage
 }
 
 /// Cycle de vie d'un abonnement vendu.
@@ -104,9 +104,9 @@ enum OpenMatchGender {
 }
 
 enum TournamentGender {
-  MEN     // Messieurs
-  WOMEN   // Dames
-  MIXED   // Mixte (1 MALE + 1 FEMALE)
+  MEN // Messieurs
+  WOMEN // Dames
+  MIXED // Mixte (1 MALE + 1 FEMALE)
 }
 
 enum TournamentStatus {
@@ -130,10 +130,10 @@ enum RegistrationPaymentStatus {
 }
 
 enum ClubEventKind {
-  MELEE       // mêlée / americano / mexicano
-  STAGE       // stage, clinic, cours ponctuel
-  SOIREE      // soirée, after-work, vie du club
-  INITIATION  // découverte / portes ouvertes
+  MELEE // mêlée / americano / mexicano
+  STAGE // stage, clinic, cours ponctuel
+  SOIREE // soirée, after-work, vie du club
+  INITIATION // découverte / portes ouvertes
   AUTRE
 }
 
@@ -146,31 +146,31 @@ enum ClubEventStatus {
 
 /// Mode d'ouverture des nouvelles réservations dans la fenêtre d'un club.
 enum BookingReleaseMode {
-  DAY_AT_HOUR    // toute la nouvelle journée s'ouvre à l'heure de release
-  ROLLING_SLOT   // chaque créneau s'ouvre exactement W jours avant son horaire (heure ignorée)
-  WINDOW_SHIFT   // réservable jusqu'à J+W à l'heure de release pile
+  DAY_AT_HOUR // toute la nouvelle journée s'ouvre à l'heure de release
+  ROLLING_SLOT // chaque créneau s'ouvre exactement W jours avant son horaire (heure ignorée)
+  WINDOW_SHIFT // réservable jusqu'à J+W à l'heure de release pile
 }
 
 /// Statut du compte Stripe Connect d'un club.
 enum StripeAccountStatus {
-  NONE        // pas encore connecté
-  PENDING     // compte créé, onboarding incomplet
-  ACTIVE      // charges_enabled=true
-  RESTRICTED  // Stripe a restreint le compte
+  NONE // pas encore connecté
+  PENDING // compte créé, onboarding incomplet
+  ACTIVE // charges_enabled=true
+  RESTRICTED // Stripe a restreint le compte
 }
 
 /// Pages de contenu éditable d'un club (une seule par type, cf. @@unique([clubId, kind])).
 enum ClubPageKind {
-  CGV              // conditions générales de vente
+  CGV // conditions générales de vente
   MENTIONS_LEGALES // mentions légales (auto-générables depuis l'identité légale)
-  CONFIDENTIALITE  // politique de confidentialité / RGPD
-  OFFRES           // « Nos offres » (page commerciale publique)
+  CONFIDENTIALITE // politique de confidentialité / RGPD
+  OFFRES // « Nos offres » (page commerciale publique)
 }
 
 /// Provenance du contenu d'une page : encore le modèle Palova, ou édité par le club.
 enum ClubPageSource {
   TEMPLATE // contenu issu du modèle Palova, non encore personnalisé
-  CUSTOM   // contenu édité par le club
+  CUSTOM // contenu édité par le club
 }
 
 enum MatchStatus {
@@ -226,155 +226,155 @@ model Sport {
   createdAt           DateTime @default(now()) @map("created_at")
   updatedAt           DateTime @updatedAt @map("updated_at")
 
-  clubSports       ClubSport[]
-  playerRatings    PlayerRating[]
-  matches          Match[]
-  preferredByUsers User[] @relation("UserPreferredSport")
+  clubSports        ClubSport[]
+  playerRatings     PlayerRating[]
+  matches           Match[]
+  preferredByUsers  User[]                   @relation("UserPreferredSport")
   ratingAdjustments PlayerRatingAdjustment[]
 
   @@map("sports")
 }
 
 model Club {
-  id               String     @id @default(cuid())
-  slug             String     @unique
-  name             String
-  address          String
-  city             String?
-  country          String?    @default("FR")
+  id                         String              @id @default(cuid())
+  slug                       String              @unique
+  name                       String
+  address                    String
+  city                       String?
+  country                    String?             @default("FR")
   // Géolocalisation (annuaire « près de moi » / par région). Renseignés par géocodage
   // de l'adresse (Base Adresse Nationale) à la création/màj ; null si géocodage indisponible.
-  latitude         Float?     @map("latitude")
-  longitude        Float?     @map("longitude")
-  region           String?    @map("region")
-  postalCode       String?    @map("postal_code")
+  latitude                   Float?              @map("latitude")
+  longitude                  Float?              @map("longitude")
+  region                     String?             @map("region")
+  postalCode                 String?             @map("postal_code")
   // Calendrier national des tournois : opt-in club + département (facette + affichage)
-  department                String?  @map("department")
-  departmentCode            String?  @map("department_code")
-  listTournamentsNationally Boolean  @default(false) @map("list_tournaments_nationally")
-  // Parties ouvertes sur la vitrine palova.fr / Découvrir : opt-in club, miroir du calendrier national
-  listOpenMatchesNationally Boolean  @default(false) @map("list_open_matches_nationally")
-  description      String?
-  presentationText String?  @map("presentation_text")   // présentation longue (page « Le club »)
-  contactPhone     String?  @map("contact_phone")
-  contactEmail     String?  @map("contact_email")
-  openingHoursText String?  @map("opening_hours_text")  // texte libre, ex. « Lun-Ven 8h-22h »
+  department                 String?             @map("department")
+  departmentCode             String?             @map("department_code")
+  listTournamentsNationally  Boolean             @default(false) @map("list_tournaments_nationally")
+  // Parties ouvertes sur la vitrine palova.fr / Où jouer : opt-in club, miroir du calendrier national
+  listOpenMatchesNationally  Boolean             @default(false) @map("list_open_matches_nationally")
+  description                String?
+  presentationText           String?             @map("presentation_text") // présentation longue (page « Le club »)
+  contactPhone               String?             @map("contact_phone")
+  contactEmail               String?             @map("contact_email")
+  openingHoursText           String?             @map("opening_hours_text") // texte libre, ex. « Lun-Ven 8h-22h »
   // Opt-in : afficher les formules (abonnements + carnets) sur le Club-house public.
-  showOffersPublicly Boolean @default(false) @map("show_offers_publicly")
+  showOffersPublicly         Boolean             @default(false) @map("show_offers_publicly")
   // Vitrine club : année de création (kicker « Depuis 2021 ») + équipements cochés
   // (catalogue fermé AMENITY_KEYS — presentation.service, miroir front lib/clubShowcase).
-  foundedYear Int?     @map("founded_year")
-  amenities   String[] @default([]) @map("amenities")
+  foundedYear                Int?                @map("founded_year")
+  amenities                  String[]            @default([]) @map("amenities")
   // Garde anti-tourisme : vérification API d'État du SIRET du club + détection des clubs fantômes.
   // Réutilise le champ `siret` légal existant (identité légale, plus bas dans ce modèle) —
   // même colonne, même sémantique (SIRET du club) : pas de doublon de champ/colonne.
   // null = club pré-feature ou créé par le superadmin sans SIRET (jamais purgé par le janitor).
-  siretVerifiedAt     DateTime? @map("siret_verified_at")       // confirmation recherche-entreprises ; null = non vérifié (API indispo)
-  siretLegalName      String?   @map("siret_legal_name")        // raison sociale renvoyée par l'API
-  setupReminderSentAt DateTime? @map("setup_reminder_sent_at")  // relance J+15 « aucun terrain » envoyée (jamais 2 fois)
-  autoSuspendedAt     DateTime? @map("auto_suspended_at")       // suspension auto J+30 faite (jamais 2 fois, même après réactivation)
-  timezone         String     @default("Europe/Paris")
-  logoUrl          String?    @map("logo_url")
-  coverImageUrl    String?    @map("cover_image_url") // couverture club (annuaire + page) ; null = illustration auto-générée
-  logoWideUrl      String?    @map("logo_wide_url")      // logotype horizontal (fond clair) — bandeau + emails
-  logoWideDarkUrl  String?    @map("logo_wide_dark_url") // logotype pour fond sombre (bandeau en thème floodlit)
-  accentColor      String     @default("#d6ff3f") @map("accent_color")
-  defaultThemeMode String     @default("floodlit") @map("default_theme_mode")
-  status           ClubStatus @default(ACTIVE)
-  listedInDirectory Boolean   @default(true) @map("listed_in_directory") // visible dans l'annuaire public (le club reste joignable par son sous-domaine si false)
-  publicBookingDays Int       @default(7)  @map("public_booking_days")  // fenêtre de résa grand public
-  memberBookingDays Int       @default(14) @map("member_booking_days")  // fenêtre élargie pour les abonnés
+  siretVerifiedAt            DateTime?           @map("siret_verified_at") // confirmation recherche-entreprises ; null = non vérifié (API indispo)
+  siretLegalName             String?             @map("siret_legal_name") // raison sociale renvoyée par l'API
+  setupReminderSentAt        DateTime?           @map("setup_reminder_sent_at") // relance J+15 « aucun terrain » envoyée (jamais 2 fois)
+  autoSuspendedAt            DateTime?           @map("auto_suspended_at") // suspension auto J+30 faite (jamais 2 fois, même après réactivation)
+  timezone                   String              @default("Europe/Paris")
+  logoUrl                    String?             @map("logo_url")
+  coverImageUrl              String?             @map("cover_image_url") // couverture club (annuaire + page) ; null = illustration auto-générée
+  logoWideUrl                String?             @map("logo_wide_url") // logotype horizontal (fond clair) — bandeau + emails
+  logoWideDarkUrl            String?             @map("logo_wide_dark_url") // logotype pour fond sombre (bandeau en thème floodlit)
+  accentColor                String              @default("#d6ff3f") @map("accent_color")
+  defaultThemeMode           String              @default("floodlit") @map("default_theme_mode")
+  status                     ClubStatus          @default(ACTIVE)
+  listedInDirectory          Boolean             @default(true) @map("listed_in_directory") // visible dans l'annuaire public (le club reste joignable par son sous-domaine si false)
+  publicBookingDays          Int                 @default(7) @map("public_booking_days") // fenêtre de résa grand public
+  memberBookingDays          Int                 @default(14) @map("member_booking_days") // fenêtre élargie pour les abonnés
   // Ouverture des réservations dans la fenêtre. Défaut DAY_AT_HOUR + 0h = ouverture à minuit (comportement historique).
-  bookingReleaseMode BookingReleaseMode @default(DAY_AT_HOUR) @map("booking_release_mode")
-  publicReleaseHour  Int                @default(0)          @map("public_release_hour") // heure (0-23) d'ouverture grand public
-  memberReleaseHour  Int                @default(0)          @map("member_release_hour") // heure (0-23) d'ouverture abonnés
+  bookingReleaseMode         BookingReleaseMode  @default(DAY_AT_HOUR) @map("booking_release_mode")
+  publicReleaseHour          Int                 @default(0) @map("public_release_hour") // heure (0-23) d'ouverture grand public
+  memberReleaseHour          Int                 @default(0) @map("member_release_hour") // heure (0-23) d'ouverture abonnés
   // Plages d'heures CREUSES par jour de semaine (clé = weekday Luxon 1=lundi..7=dimanche),
   // plusieurs plages possibles par jour, ex. { "1": [{ "start": 9, "end": 12 }, { "start": 14, "end": 17 }] }.
   // Hors plage = heures pleines. null ou jour absent = tout en pleines.
-  offPeakHours     Json?      @map("off_peak_hours")
+  offPeakHours               Json?               @map("off_peak_hours")
   // Quotas de réservations COURT par joueur, choisis par le club. null = désactivé.
   // { "model": "UPCOMING"|"WEEKLY", "subscriber": { "peak": n|null, "offPeak": n|null }, "nonSubscriber": idem }
   // UPCOMING = résas à venir simultanées ; WEEKLY = semaine calendaire lun-dim (fuseau club).
   // Limite null = illimité, 0 = bloqué. Une résa compte en creuses ssi 100 % de ses minutes le sont.
-  bookingQuotas    Json?      @map("booking_quotas")
+  bookingQuotas              Json?               @map("booking_quotas")
   // Sections du Club-house : ordre + visibilité choisis par l'admin, appliqués à tous.
   // Tableau ordonné [{ "key": "matches", "visible": true }, ...] — clés connues :
   // matches/agenda/posters/top/offers/clubCard/announcements + sponsors (visibilité
   // seule, position fixe en bas). null = ordre adaptatif par défaut (visiteur/membre).
-  clubHouseSections Json? @map("club_house_sections")
+  clubHouseSections          Json?               @map("club_house_sections")
   // Vitesse d'auto-défilement du kiosque « À la une » du Club-house, en secondes.
   // 0 = manuel (pas de défilement automatique) ; sinon borné 3..20 s. Défaut 6.
-  clubHouseKioskSeconds Int @default(6) @map("club_house_kiosk_seconds")
+  clubHouseKioskSeconds      Int                 @default(6) @map("club_house_kiosk_seconds")
   // Délais (heures avant le début d'une réservation) au-delà desquels le joueur ne
   // peut plus, respectivement, changer les joueurs de la partie / annuler. 0 = jusqu'au début.
-  playerChangeCutoffHours Int @default(0) @map("player_change_cutoff_hours")
-  cancellationCutoffHours Int @default(0) @map("cancellation_cutoff_hours")
+  playerChangeCutoffHours    Int                 @default(0) @map("player_change_cutoff_hours")
+  cancellationCutoffHours    Int                 @default(0) @map("cancellation_cutoff_hours")
   // « Mes réservations » sur l'app de ce club : false (défaut) = n'affiche que ce club ;
   // true = affiche aussi les réservations/tournois/events des autres clubs du joueur.
-  showOtherClubsReservations Boolean @default(false) @map("show_other_clubs_reservations")
+  showOtherClubsReservations Boolean             @default(false) @map("show_other_clubs_reservations")
   // Active le système de niveau de joueur (Glicko-2) pour ce club. Opt-out.
-  levelSystemEnabled Boolean @default(true) @map("level_system_enabled")
+  levelSystemEnabled         Boolean             @default(true) @map("level_system_enabled")
   // Rembourse automatiquement les paiements d'une réservation annulée dans la fenêtre d'annulation. Opt-in.
-  refundOnCancelWithinCutoff Boolean @default(false) @map("refund_on_cancel_within_cutoff")
+  refundOnCancelWithinCutoff Boolean             @default(false) @map("refund_on_cancel_within_cutoff")
   // Stripe Connect : compte propre au club (Express, direct charges).
-  stripeAccountId        String?             @map("stripe_account_id")
-  stripeAccountStatus    StripeAccountStatus @default(NONE) @map("stripe_account_status")
-  requireOnlinePayment   Boolean             @default(false) @map("require_online_payment")
-  requireCardFingerprint Boolean             @default(false) @map("require_card_fingerprint")
+  stripeAccountId            String?             @map("stripe_account_id")
+  stripeAccountStatus        StripeAccountStatus @default(NONE) @map("stripe_account_status")
+  requireOnlinePayment       Boolean             @default(false) @map("require_online_payment")
+  requireCardFingerprint     Boolean             @default(false) @map("require_card_fingerprint")
   // Facturation SaaS Palova (offre au membre actif) — Customer Stripe du COMPTE
   // PLATEFORME (≠ ClubStripeCustomer, qui vit sur les comptes Connect des clubs).
-  platformCustomerId  String?   @map("platform_customer_id")
-  activeMemberCount   Int       @default(0) @map("active_member_count")    // snapshot metering nocturne
-  activeMemberCountAt DateTime? @map("active_member_count_at")
-  billingExempt       Boolean   @default(false) @map("billing_exempt")     // club partenaire exonéré (superadmin)
+  platformCustomerId         String?             @map("platform_customer_id")
+  activeMemberCount          Int                 @default(0) @map("active_member_count") // snapshot metering nocturne
+  activeMemberCountAt        DateTime?           @map("active_member_count_at")
+  billingExempt              Boolean             @default(false) @map("billing_exempt") // club partenaire exonéré (superadmin)
   // Moyens d'encaissement rapides (boutons 1 clic au comptoir), choisis par le club.
   // Sous-ensemble ordonné de PaymentMethod parmi CASH/CARD/VOUCHER/CHEQUE/TRANSFER/MEMBER.
-  quickPaymentMethods String[] @default(["CARD", "VOUCHER", "CASH"]) @map("quick_payment_methods")
+  quickPaymentMethods        String[]            @default(["CARD", "VOUCHER", "CASH"]) @map("quick_payment_methods")
   // « Paiement au club » : encaissement en un clic — pas de choix de moyen, un seul bouton
   // « Encaissé » qui enregistre un vrai paiement sous le moyen neutre CLUB (compte dans le CA).
-  payAtClubOnly       Boolean  @default(false) @map("pay_at_club_only")
+  payAtClubOnly              Boolean             @default(false) @map("pay_at_club_only")
   // Identité légale du club (marchand Stripe Connect distinct) : alimente les mentions
   // légales auto-générées et les modèles de CGV/confidentialité. Tous optionnels.
-  legalEntityName     String? @map("legal_entity_name")     // raison sociale
-  legalForm           String? @map("legal_form")            // SARL, SAS, association loi 1901…
-  siret               String? @map("siret")
-  vatNumber           String? @map("vat_number")            // TVA intracommunautaire
-  legalRepresentative String? @map("legal_representative")  // directeur de la publication
-  legalEmail          String? @map("legal_email")
-  legalPhone          String? @map("legal_phone")
+  legalEntityName            String?             @map("legal_entity_name") // raison sociale
+  legalForm                  String?             @map("legal_form") // SARL, SAS, association loi 1901…
+  siret                      String?             @map("siret")
+  vatNumber                  String?             @map("vat_number") // TVA intracommunautaire
+  legalRepresentative        String?             @map("legal_representative") // directeur de la publication
+  legalEmail                 String?             @map("legal_email")
+  legalPhone                 String?             @map("legal_phone")
   /// Médiation de la consommation (obligation B2C du club) — injecté dans le modèle CGV.
-  mediatorName String? @map("mediator_name")
-  mediatorUrl  String? @map("mediator_url")
-  createdAt        DateTime   @default(now()) @map("created_at")
-  updatedAt        DateTime   @updatedAt @map("updated_at")
+  mediatorName               String?             @map("mediator_name")
+  mediatorUrl                String?             @map("mediator_url")
+  createdAt                  DateTime            @default(now()) @map("created_at")
+  updatedAt                  DateTime            @updatedAt @map("updated_at")
 
-  clubSports  ClubSport[]
-  matches     Match[]
-  resources   Resource[]
-  members     ClubMember[]
-  clubMemberships ClubMembership[]
-  announcements Announcement[]
-  sponsors      Sponsor[]
-  tournaments  Tournament[]
-  clubEvents   ClubEvent[]
-  clubEventSeries ClubEventSeries[]
-  packageTemplates PackageTemplate[]
-  memberPackages   MemberPackage[]
-  slugAliases      ClubSlugAlias[]
-  counters         ClubCounter[]
-  stripeCustomers  ClubStripeCustomer[]
-  pages            ClubPage[]
-  faqItems         ClubFaqItem[]
-  coaches          Coach[]
-  reservationSeries ReservationSeries[]
-  lessons          Lesson[]
-  clubBroadcasts   ClubBroadcast[]
-  emailTemplates   ClubEmailTemplate[]
-  memberNotes      MemberNote[]
-  ratingAdjustments PlayerRatingAdjustment[]
-  subscriptionPlans SubscriptionPlan[]
-  subscriptions     Subscription[]
-  photos            ClubPhoto[]
+  clubSports           ClubSport[]
+  matches              Match[]
+  resources            Resource[]
+  members              ClubMember[]
+  clubMemberships      ClubMembership[]
+  announcements        Announcement[]
+  sponsors             Sponsor[]
+  tournaments          Tournament[]
+  clubEvents           ClubEvent[]
+  clubEventSeries      ClubEventSeries[]
+  packageTemplates     PackageTemplate[]
+  memberPackages       MemberPackage[]
+  slugAliases          ClubSlugAlias[]
+  counters             ClubCounter[]
+  stripeCustomers      ClubStripeCustomer[]
+  pages                ClubPage[]
+  faqItems             ClubFaqItem[]
+  coaches              Coach[]
+  reservationSeries    ReservationSeries[]
+  lessons              Lesson[]
+  clubBroadcasts       ClubBroadcast[]
+  emailTemplates       ClubEmailTemplate[]
+  memberNotes          MemberNote[]
+  ratingAdjustments    PlayerRatingAdjustment[]
+  subscriptionPlans    SubscriptionPlan[]
+  subscriptions        Subscription[]
+  photos               ClubPhoto[]
   platformSubscription PlatformSubscription?
   memberSnapshots      ClubMemberSnapshot[]
   matchAlerts          MatchAlert[]
@@ -409,7 +409,7 @@ model ClubFaqItem {
   clubId         String   @map("club_id")
   question       String
   answerMarkdown String   @map("answer_markdown")
-  category       String?  // libellé de rubrique (regroupement d'affichage)
+  category       String? // libellé de rubrique (regroupement d'affichage)
   sortOrder      Int      @default(0) @map("sort_order")
   published      Boolean  @default(true)
   createdAt      DateTime @default(now()) @map("created_at")
@@ -444,11 +444,11 @@ model ClubSport {
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
-  club       Club        @relation(fields: [clubId], references: [id], onDelete: Cascade)
-  sport      Sport       @relation(fields: [sportId], references: [id], onDelete: Restrict)
-  resources  Resource[]
+  club        Club         @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  sport       Sport        @relation(fields: [sportId], references: [id], onDelete: Restrict)
+  resources   Resource[]
   tournaments Tournament[]
-  clubEvents ClubEvent[]
+  clubEvents  ClubEvent[]
 
   @@unique([clubId, sportId])
   @@index([clubId])
@@ -471,10 +471,10 @@ model Resource {
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
-  club         Club          @relation(fields: [clubId], references: [id], onDelete: Cascade)
-  clubSport    ClubSport     @relation(fields: [clubSportId], references: [id], onDelete: Cascade)
-  reservations Reservation[]
-  series       ReservationSeries[]
+  club               Club                @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  clubSport          ClubSport           @relation(fields: [clubSportId], references: [id], onDelete: Cascade)
+  reservations       Reservation[]
+  series             ReservationSeries[]
   promotionResources PromotionResource[]
 
   @@index([clubId])
@@ -489,7 +489,7 @@ model Promotion {
   clubId      String        @map("club_id")
   name        String
   startDate   DateTime      @map("start_date") @db.Date // bornes incluses, date locale du club
-  endDate     DateTime      @map("end_date")   @db.Date
+  endDate     DateTime      @map("end_date") @db.Date
   windowStart Int?          @map("window_start") // minutes depuis minuit ; null = toute la journée
   windowEnd   Int?          @map("window_end")
   kind        PromotionKind
@@ -521,82 +521,82 @@ model PromotionResource {
 
 /// Compte global. Le rôle au sein d'un club est porté par ClubMember (multi-club).
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  password  String
-  firstName String   @map("first_name")
-  lastName  String   @map("last_name")
-  phone     String?
-  sex          Sex?
-  birthDate DateTime? @map("birth_date") @db.Date
-  avatarUrl String?   @map("avatar_url")
+  id                    String    @id @default(cuid())
+  email                 String    @unique
+  password              String
+  firstName             String    @map("first_name")
+  lastName              String    @map("last_name")
+  phone                 String?
+  sex                   Sex?
+  birthDate             DateTime? @map("birth_date") @db.Date
+  avatarUrl             String?   @map("avatar_url")
   /// Préférence de langue (fr/en/es) — l'interface reste en français pour l'instant.
-  locale    String?   @default("fr")
-  showInLeaderboard Boolean @default(false) @map("show_in_leaderboard")
+  locale                String?   @default("fr")
+  showInLeaderboard     Boolean   @default(false) @map("show_in_leaderboard")
   /// Opt-in : « Propose-moi les parties à mon niveau » — notification (jamais d'inscription auto).
-  autoMatchProposals Boolean @default(false) @map("auto_match_proposals")
+  autoMatchProposals    Boolean   @default(false) @map("auto_match_proposals")
   /// Opt-in : autoriser les autres membres à m'envoyer une demande d'ami (ne concerne PAS le chat).
-  acceptsFriendRequests Boolean @default(true) @map("accepts_friend_requests")
+  acceptsFriendRequests Boolean   @default(true) @map("accepts_friend_requests")
   /// Opt-out : refuser les nouveaux messages privés des non-amis (les amis confirmés passent toujours).
-  acceptsDirectMessages Boolean @default(true) @map("accepts_direct_messages")
-  preferredSportId String? @map("preferred_sport_id")
-  preferredSport   Sport?  @relation("UserPreferredSport", fields: [preferredSportId], references: [id], onDelete: SetNull)
-  emailVerified Boolean @default(false) @map("email_verified")
-  isSuperAdmin Boolean @default(false) @map("is_super_admin")
+  acceptsDirectMessages Boolean   @default(true) @map("accepts_direct_messages")
+  preferredSportId      String?   @map("preferred_sport_id")
+  preferredSport        Sport?    @relation("UserPreferredSport", fields: [preferredSportId], references: [id], onDelete: SetNull)
+  emailVerified         Boolean   @default(false) @map("email_verified")
+  isSuperAdmin          Boolean   @default(false) @map("is_super_admin")
   /// Incrémenté à la suppression de compte ou à la réinitialisation du mot de passe :
   /// un JWT signé avec une version antérieure est révoqué (cf. authMiddleware).
-  tokenVersion Int @default(0) @map("token_version")
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
-  deletedAt    DateTime? @map("deleted_at")
+  tokenVersion          Int       @default(0) @map("token_version")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+  deletedAt             DateTime? @map("deleted_at")
 
-  reservations    Reservation[]
-  reservationParticipations ReservationParticipant[]
-  playerRatings   PlayerRating[]
-  ratingAdjustments      PlayerRatingAdjustment[] @relation("RatingAdjustmentMember")
-  ratingAdjustmentsMade  PlayerRatingAdjustment[] @relation("RatingAdjustmentStaff")
-  matchPlayers    MatchPlayer[]
-  matchComments   MatchComment[]
-  createdMatches  Match[]       @relation("MatchCreator")
-  cancelledMatches Match[]      @relation("MatchCancelledBy")
-  staffRoles      ClubMember[]
-  clubMemberships ClubMembership[]
-  captainRegistrations TournamentRegistration[] @relation("CaptainRegistrations")
-  partnerRegistrations TournamentRegistration[] @relation("PartnerRegistrations")
-  eventRegistrations   EventRegistration[]
-  refereedTournaments  Tournament[] @relation("TournamentReferee")
-  tournamentBenchEntries      TournamentBenchEntry[] @relation("TournamentBenchUser")
-  tournamentBenchEntriesAdded TournamentBenchEntry[] @relation("TournamentBenchAddedBy")
-  tournamentLogEntries        TournamentLogEntry[]   @relation("TournamentLogActor")
-  emailVerification EmailVerification?
-  passwordReset  PasswordReset?
-  memberPackages MemberPackage[]
-  paymentsCreated Payment[] @relation("PaymentsCreated")
-  stripeCustomers  ClubStripeCustomer[]
-  lessonEnrollments LessonEnrollment[]
-  coachProfiles     Coach[]
-  notifications           Notification[]
-  notificationPreferences NotificationPreference[]
-  pushSubscriptions       PushSubscription[]
-  memberNotes             MemberNote[] @relation("MemberNoteSubject")
-  authoredMemberNotes     MemberNote[] @relation("MemberNoteAuthor")
-  subscriptions           Subscription[]
-  openMatchMessages       OpenMatchMessage[]
-  matchAlerts             MatchAlert[]
-  followsGiven            Follow[] @relation("FollowsGiven")
-  followsReceived         Follow[] @relation("FollowsReceived")
-  friendshipsA           Friendship[] @relation("FriendshipA")
-  friendshipsB           Friendship[] @relation("FriendshipB")
-  conversationsA          Conversation[] @relation("ConversationsAsA")
-  conversationsB          Conversation[] @relation("ConversationsAsB")
-  conversationParticipations ConversationParticipant[]
-  directMessages          DirectMessage[]
-  messageReactions        MessageReaction[]
-  blocksGiven             UserBlock[] @relation("BlocksGiven")
-  blocksReceived          UserBlock[] @relation("BlocksReceived")
-  messageReportsFiled     MessageReport[] @relation("MessageReportsFiled")
-  messageReportsResolved  MessageReport[] @relation("MessageReportsResolved")
-  legalAcceptances        LegalAcceptance[]
+  reservations                Reservation[]
+  reservationParticipations   ReservationParticipant[]
+  playerRatings               PlayerRating[]
+  ratingAdjustments           PlayerRatingAdjustment[]  @relation("RatingAdjustmentMember")
+  ratingAdjustmentsMade       PlayerRatingAdjustment[]  @relation("RatingAdjustmentStaff")
+  matchPlayers                MatchPlayer[]
+  matchComments               MatchComment[]
+  createdMatches              Match[]                   @relation("MatchCreator")
+  cancelledMatches            Match[]                   @relation("MatchCancelledBy")
+  staffRoles                  ClubMember[]
+  clubMemberships             ClubMembership[]
+  captainRegistrations        TournamentRegistration[]  @relation("CaptainRegistrations")
+  partnerRegistrations        TournamentRegistration[]  @relation("PartnerRegistrations")
+  eventRegistrations          EventRegistration[]
+  refereedTournaments         Tournament[]              @relation("TournamentReferee")
+  tournamentBenchEntries      TournamentBenchEntry[]    @relation("TournamentBenchUser")
+  tournamentBenchEntriesAdded TournamentBenchEntry[]    @relation("TournamentBenchAddedBy")
+  tournamentLogEntries        TournamentLogEntry[]      @relation("TournamentLogActor")
+  emailVerification           EmailVerification?
+  passwordReset               PasswordReset?
+  memberPackages              MemberPackage[]
+  paymentsCreated             Payment[]                 @relation("PaymentsCreated")
+  stripeCustomers             ClubStripeCustomer[]
+  lessonEnrollments           LessonEnrollment[]
+  coachProfiles               Coach[]
+  notifications               Notification[]
+  notificationPreferences     NotificationPreference[]
+  pushSubscriptions           PushSubscription[]
+  memberNotes                 MemberNote[]              @relation("MemberNoteSubject")
+  authoredMemberNotes         MemberNote[]              @relation("MemberNoteAuthor")
+  subscriptions               Subscription[]
+  openMatchMessages           OpenMatchMessage[]
+  matchAlerts                 MatchAlert[]
+  followsGiven                Follow[]                  @relation("FollowsGiven")
+  followsReceived             Follow[]                  @relation("FollowsReceived")
+  friendshipsA                Friendship[]              @relation("FriendshipA")
+  friendshipsB                Friendship[]              @relation("FriendshipB")
+  conversationsA              Conversation[]            @relation("ConversationsAsA")
+  conversationsB              Conversation[]            @relation("ConversationsAsB")
+  conversationParticipations  ConversationParticipant[]
+  directMessages              DirectMessage[]
+  messageReactions            MessageReaction[]
+  blocksGiven                 UserBlock[]               @relation("BlocksGiven")
+  blocksReceived              UserBlock[]               @relation("BlocksReceived")
+  messageReportsFiled         MessageReport[]           @relation("MessageReportsFiled")
+  messageReportsResolved      MessageReport[]           @relation("MessageReportsResolved")
+  legalAcceptances            LegalAcceptance[]
 
   @@map("users")
 }
@@ -639,10 +639,10 @@ model PlayerRatingAdjustment {
   reason        String?
   createdAt     DateTime @default(now()) @map("created_at")
 
-  user      User   @relation("RatingAdjustmentMember", fields: [userId], references: [id], onDelete: Cascade)
-  staffUser User   @relation("RatingAdjustmentStaff", fields: [staffUserId], references: [id], onDelete: Cascade)
-  sport     Sport  @relation(fields: [sportId], references: [id], onDelete: Cascade)
-  club      Club?  @relation(fields: [clubId], references: [id], onDelete: SetNull)
+  user      User  @relation("RatingAdjustmentMember", fields: [userId], references: [id], onDelete: Cascade)
+  staffUser User  @relation("RatingAdjustmentStaff", fields: [staffUserId], references: [id], onDelete: Cascade)
+  sport     Sport @relation(fields: [sportId], references: [id], onDelete: Cascade)
+  club      Club? @relation(fields: [clubId], references: [id], onDelete: SetNull)
 
   @@index([userId, sportId])
   @@map("player_rating_adjustments")
@@ -651,29 +651,29 @@ model PlayerRatingAdjustment {
 /// Résultat d'un match 2v2 enregistré (depuis une réservation COURT à 4 joueurs).
 /// Sa confirmation déclenche la mise à jour Glicko des 4 PlayerRating (une seule fois).
 model Match {
-  id               String      @id @default(cuid())
-  clubId           String      @map("club_id")
-  sportId          String      @map("sport_id")
-  reservationId    String?     @map("reservation_id")
-  playedAt         DateTime    @map("played_at") @db.Timestamptz
-  status           MatchStatus @default(PENDING)
-  createdByUserId  String      @map("created_by_user_id")
-  sets             Json
-  winningTeam      Int?        @map("winning_team")
-  competitive      Boolean     @default(true) @map("competitive") // snapshot du type de la résa à la saisie
-  confirmDeadline  DateTime    @map("confirm_deadline")
-  ratingsAppliedAt DateTime?   @map("ratings_applied_at")
-  cancelledAt       DateTime? @map("cancelled_at")
-  cancelledByUserId String?   @map("cancelled_by_user_id")
-  cancelledReason   String?   @map("cancelled_reason")
-  createdAt        DateTime    @default(now()) @map("created_at")
-  updatedAt        DateTime    @updatedAt @map("updated_at")
+  id                String      @id @default(cuid())
+  clubId            String      @map("club_id")
+  sportId           String      @map("sport_id")
+  reservationId     String?     @map("reservation_id")
+  playedAt          DateTime    @map("played_at") @db.Timestamptz
+  status            MatchStatus @default(PENDING)
+  createdByUserId   String      @map("created_by_user_id")
+  sets              Json
+  winningTeam       Int?        @map("winning_team")
+  competitive       Boolean     @default(true) @map("competitive") // snapshot du type de la résa à la saisie
+  confirmDeadline   DateTime    @map("confirm_deadline")
+  ratingsAppliedAt  DateTime?   @map("ratings_applied_at")
+  cancelledAt       DateTime?   @map("cancelled_at")
+  cancelledByUserId String?     @map("cancelled_by_user_id")
+  cancelledReason   String?     @map("cancelled_reason")
+  createdAt         DateTime    @default(now()) @map("created_at")
+  updatedAt         DateTime    @updatedAt @map("updated_at")
 
-  club        Club          @relation(fields: [clubId], references: [id], onDelete: Cascade)
-  sport       Sport         @relation(fields: [sportId], references: [id], onDelete: Restrict)
-  reservation Reservation?  @relation(fields: [reservationId], references: [id], onDelete: SetNull)
-  creator     User          @relation("MatchCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
-  cancelledBy User?         @relation("MatchCancelledBy", fields: [cancelledByUserId], references: [id], onDelete: SetNull)
+  club        Club           @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  sport       Sport          @relation(fields: [sportId], references: [id], onDelete: Restrict)
+  reservation Reservation?   @relation(fields: [reservationId], references: [id], onDelete: SetNull)
+  creator     User           @relation("MatchCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  cancelledBy User?          @relation("MatchCancelledBy", fields: [cancelledByUserId], references: [id], onDelete: SetNull)
   players     MatchPlayer[]
   comments    MatchComment[]
 
@@ -747,21 +747,29 @@ model PasswordReset {
   @@map("password_resets")
 }
 
+/// Disponibilité au contact du J/A par les inscrits de ses tournois (réglage personnel, par club).
+enum RefereeContactPolicy {
+  ALWAYS
+  AFTER_DEADLINE
+  NEVER
+}
+
 /// Adhésion d'un joueur à un club : la base du fichier-membres géré par le club.
 /// Être membre (non BLOCKED) conditionne la réservation dans ce club.
 /// NB: table physique historiquement nommée `club_subscribers` (conservée via @@map
 /// pour une migration purement additive — l'ancien « abonné » devient isSubscriber).
 model ClubMembership {
-  id           String           @id @default(cuid())
-  userId       String           @map("user_id")
-  clubId       String           @map("club_id")
-  isSubscriber Boolean          @default(false) @map("is_subscriber") // fenêtre de résa élargie
-  membershipNo String?          @map("membership_no")                 // n° adhérent / licence
-  status       MembershipStatus @default(ACTIVE)
-  note         String?
-  watch        Boolean          @default(false)                       // drapeau « à surveiller » (staff)
-  isReferee    Boolean          @default(false) @map("is_referee")    // facette juge-arbitre
-  createdAt    DateTime         @default(now()) @map("created_at")    // = date d'adhésion
+  id                   String               @id @default(cuid())
+  userId               String               @map("user_id")
+  clubId               String               @map("club_id")
+  isSubscriber         Boolean              @default(false) @map("is_subscriber") // fenêtre de résa élargie
+  membershipNo         String?              @map("membership_no") // n° adhérent / licence
+  status               MembershipStatus     @default(ACTIVE)
+  note                 String?
+  watch                Boolean              @default(false) // drapeau « à surveiller » (staff)
+  isReferee            Boolean              @default(false) @map("is_referee") // facette juge-arbitre
+  refereeContactPolicy RefereeContactPolicy @default(AFTER_DEADLINE) @map("referee_contact_policy") // dispo au contact (facette J/A)
+  createdAt            DateTime             @default(now()) @map("created_at") // = date d'adhésion
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   club Club @relation(fields: [clubId], references: [id], onDelete: Cascade)
@@ -776,7 +784,7 @@ model ClubMembership {
 model MemberNote {
   id        String   @id @default(cuid())
   clubId    String   @map("club_id")
-  userId    String   @map("user_id")   // membre concerné
+  userId    String   @map("user_id") // membre concerné
   authorId  String?  @map("author_id") // staff auteur (null si compte supprimé)
   body      String
   createdAt DateTime @default(now()) @map("created_at")
@@ -807,38 +815,38 @@ model ClubMember {
 }
 
 model Reservation {
-  id          String            @id @default(cuid())
-  resourceId  String            @map("resource_id")
-  userId      String?           @map("user_id")
-  startTime   DateTime          @map("start_time") @db.Timestamptz
-  endTime     DateTime          @map("end_time") @db.Timestamptz
-  status      ReservationStatus @default(PENDING)
-  type        ReservationType   @default(COURT)
-  visibility  ReservationVisibility @default(PRIVATE) // PUBLIC = partie ouverte (rejoignable par les membres du club)
-  competitive Boolean @default(true) // Amicale (false) vs Compétitive (true) : gate le niveau du résultat
+  id             String                @id @default(cuid())
+  resourceId     String                @map("resource_id")
+  userId         String?               @map("user_id")
+  startTime      DateTime              @map("start_time") @db.Timestamptz
+  endTime        DateTime              @map("end_time") @db.Timestamptz
+  status         ReservationStatus     @default(PENDING)
+  type           ReservationType       @default(COURT)
+  visibility     ReservationVisibility @default(PRIVATE) // PUBLIC = partie ouverte (rejoignable par les membres du club)
+  competitive    Boolean               @default(true) // Amicale (false) vs Compétitive (true) : gate le niveau du résultat
   // Fourchette de niveau cible (0–8) d'une partie ouverte (visibility PUBLIC). null = pas de cible.
-  targetLevelMin Float? @map("target_level_min")
-  targetLevelMax Float? @map("target_level_max")
+  targetLevelMin Float?                @map("target_level_min")
+  targetLevelMax Float?                @map("target_level_max")
   // Genre d'une partie ouverte (visibility PUBLIC, padel). null = ouverte à tous.
-  matchGender    OpenMatchGender? @map("match_gender")
-  seriesId    String?           @map("series_id") // occurrence d'une série (récurrence admin)
-  title       String?
-  totalPrice  Decimal           @map("total_price") @db.Decimal(10, 2)
-  notes       String?
-  cancelledAt DateTime?         @map("cancelled_at")
-  cgvAcceptedAt DateTime?       @map("cgv_accepted_at")
-  createdAt   DateTime          @default(now()) @map("created_at")
-  updatedAt   DateTime          @updatedAt @map("updated_at")
+  matchGender    OpenMatchGender?      @map("match_gender")
+  seriesId       String?               @map("series_id") // occurrence d'une série (récurrence admin)
+  title          String?
+  totalPrice     Decimal               @map("total_price") @db.Decimal(10, 2)
+  notes          String?
+  cancelledAt    DateTime?             @map("cancelled_at")
+  cgvAcceptedAt  DateTime?             @map("cgv_accepted_at")
+  createdAt      DateTime              @default(now()) @map("created_at")
+  updatedAt      DateTime              @updatedAt @map("updated_at")
 
-  resource     Resource                 @relation(fields: [resourceId], references: [id], onDelete: Restrict)
-  user         User?                    @relation(fields: [userId], references: [id], onDelete: Restrict)
-  payments     Payment[]
-  participants ReservationParticipant[]
-  matches      Match[]
-  series       ReservationSeries?       @relation(fields: [seriesId], references: [id], onDelete: SetNull)
-  lesson       Lesson?
-  openMatchMessages  OpenMatchMessage[]
-  matchAlertHits     MatchAlertHit[]
+  resource          Resource                 @relation(fields: [resourceId], references: [id], onDelete: Restrict)
+  user              User?                    @relation(fields: [userId], references: [id], onDelete: Restrict)
+  payments          Payment[]
+  participants      ReservationParticipant[]
+  matches           Match[]
+  series            ReservationSeries?       @relation(fields: [seriesId], references: [id], onDelete: SetNull)
+  lesson            Lesson?
+  openMatchMessages OpenMatchMessage[]
+  matchAlertHits    MatchAlertHit[]
 
   @@index([resourceId, startTime, endTime])
   @@index([status, createdAt])
@@ -858,8 +866,8 @@ model ReservationParticipant {
   isOrganizer   Boolean  @default(false) @map("is_organizer")
   share         Decimal  @db.Decimal(10, 2) // part du montant total à régler par ce joueur
   joinedAt      DateTime @default(now()) @map("joined_at")
-  team          Int?     // 1 = côté gauche (Éq.1), 2 = côté droit (Éq.2) ; null = non assigné (dérivé à la lecture)
-  slot          Int?     // 0 = G, 1 = D au sein de l'équipe ; null = non assigné (dérivé à la lecture)
+  team          Int? // 1 = côté gauche (Éq.1), 2 = côté droit (Éq.2) ; null = non assigné (dérivé à la lecture)
+  slot          Int? // 0 = G, 1 = D au sein de l'équipe ; null = non assigné (dérivé à la lecture)
 
   reservation Reservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
   user        User        @relation(fields: [userId], references: [id], onDelete: Restrict)
@@ -875,52 +883,52 @@ model ReservationParticipant {
 /// package (memberPackageId). clubId est toujours renseigné pour les nouveaux
 /// paiements (backfillé pour l'historique) — base du récap de caisse.
 model Payment {
-  id              String         @id @default(cuid())
-  reservationId   String?        @map("reservation_id")
-  participantId   String?        @map("participant_id") // paiement attribué à un joueur précis ; null = paiement « résa » global
-  clubId          String?        @map("club_id")
-  tournamentRegistrationId String? @map("tournament_registration_id")
-  eventRegistrationId      String? @map("event_registration_id")
-  amount          Decimal        @db.Decimal(10, 2)
-  method          PaymentMethod  @default(CASH)
-  payerName       String?        @map("payer_name")
-  note            String?
-  noShow          Boolean        @default(false) @map("no_show") // débit d'absence (no-show), distinct d'un paiement normal
-  memberPackageId String?        @map("member_package_id") // = vente de ce package
-  sourcePackageId String?        @map("source_package_id") // = consommation de ce package
-  subscriptionId       String? @map("subscription_id")        // = vente de cet abonnement
-  sourceSubscriptionId String? @map("source_subscription_id") // = couverture par cet abonnement
-  voucherRef      String?        @map("voucher_ref")
-  voucherIssuer   String?        @map("voucher_issuer")
-  voucherStatus   VoucherStatus? @map("voucher_status")
-  createdAt       DateTime       @default(now()) @map("created_at")
-  status          PaymentStatus  @default(CAPTURED) @map("status")
-  refundedAmount  Decimal        @default(0) @db.Decimal(10, 2) @map("refunded_amount")
-  createdByUserId String?        @map("created_by_user_id")
-  receiptNo       Int?           @map("receipt_no") // numéro de reçu séquentiel par club
-  stripePaymentIntentId String? @map("stripe_payment_intent_id")
-  stripePaymentMethodId String? @map("stripe_payment_method_id")
-  cgvAcceptedAt   DateTime?      @map("cgv_accepted_at")
+  id                       String         @id @default(cuid())
+  reservationId            String?        @map("reservation_id")
+  participantId            String?        @map("participant_id") // paiement attribué à un joueur précis ; null = paiement « résa » global
+  clubId                   String?        @map("club_id")
+  tournamentRegistrationId String?        @map("tournament_registration_id")
+  eventRegistrationId      String?        @map("event_registration_id")
+  amount                   Decimal        @db.Decimal(10, 2)
+  method                   PaymentMethod  @default(CASH)
+  payerName                String?        @map("payer_name")
+  note                     String?
+  noShow                   Boolean        @default(false) @map("no_show") // débit d'absence (no-show), distinct d'un paiement normal
+  memberPackageId          String?        @map("member_package_id") // = vente de ce package
+  sourcePackageId          String?        @map("source_package_id") // = consommation de ce package
+  subscriptionId           String?        @map("subscription_id") // = vente de cet abonnement
+  sourceSubscriptionId     String?        @map("source_subscription_id") // = couverture par cet abonnement
+  voucherRef               String?        @map("voucher_ref")
+  voucherIssuer            String?        @map("voucher_issuer")
+  voucherStatus            VoucherStatus? @map("voucher_status")
+  createdAt                DateTime       @default(now()) @map("created_at")
+  status                   PaymentStatus  @default(CAPTURED) @map("status")
+  refundedAmount           Decimal        @default(0) @map("refunded_amount") @db.Decimal(10, 2)
+  createdByUserId          String?        @map("created_by_user_id")
+  receiptNo                Int?           @map("receipt_no") // numéro de reçu séquentiel par club
+  stripePaymentIntentId    String?        @map("stripe_payment_intent_id")
+  stripePaymentMethodId    String?        @map("stripe_payment_method_id")
+  cgvAcceptedAt            DateTime?      @map("cgv_accepted_at")
 
-  reservation   Reservation?            @relation(fields: [reservationId], references: [id], onDelete: Cascade)
-  participant   ReservationParticipant? @relation(fields: [participantId], references: [id], onDelete: SetNull)
-  memberPackage MemberPackage?          @relation("PackageSale", fields: [memberPackageId], references: [id], onDelete: SetNull)
-  sourcePackage MemberPackage?          @relation("PackageConsumption", fields: [sourcePackageId], references: [id], onDelete: SetNull)
-  subscriptionSale   Subscription? @relation("SubscriptionSale", fields: [subscriptionId], references: [id], onDelete: SetNull)
-  sourceSubscription Subscription? @relation("SubscriptionCoverage", fields: [sourceSubscriptionId], references: [id], onDelete: SetNull)
-  createdBy     User?                   @relation("PaymentsCreated", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  reservation            Reservation?            @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  participant            ReservationParticipant? @relation(fields: [participantId], references: [id], onDelete: SetNull)
+  memberPackage          MemberPackage?          @relation("PackageSale", fields: [memberPackageId], references: [id], onDelete: SetNull)
+  sourcePackage          MemberPackage?          @relation("PackageConsumption", fields: [sourcePackageId], references: [id], onDelete: SetNull)
+  subscriptionSale       Subscription?           @relation("SubscriptionSale", fields: [subscriptionId], references: [id], onDelete: SetNull)
+  sourceSubscription     Subscription?           @relation("SubscriptionCoverage", fields: [sourceSubscriptionId], references: [id], onDelete: SetNull)
+  createdBy              User?                   @relation("PaymentsCreated", fields: [createdByUserId], references: [id], onDelete: SetNull)
   tournamentRegistration TournamentRegistration? @relation(fields: [tournamentRegistrationId], references: [id], onDelete: SetNull)
   eventRegistration      EventRegistration?      @relation(fields: [eventRegistrationId], references: [id], onDelete: SetNull)
-  refunds       Refund[]
+  refunds                Refund[]
 
+  @@unique([stripePaymentIntentId])
+  @@unique([clubId, receiptNo])
   @@index([reservationId])
   @@index([participantId])
   @@index([clubId, createdAt])
   @@index([clubId, status])
-  @@unique([stripePaymentIntentId])
   @@index([tournamentRegistrationId])
   @@index([eventRegistrationId])
-  @@unique([clubId, receiptNo])
   @@map("payments")
 }
 
@@ -929,7 +937,7 @@ model Payment {
 model ClubCounter {
   id        String   @id @default(cuid())
   clubId    String   @map("club_id")
-  kind      String   // ex. "RECEIPT"
+  kind      String // ex. "RECEIPT"
   value     Int      @default(0)
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -988,13 +996,13 @@ model PackageTemplate {
   clubId       String      @map("club_id")
   kind         PackageKind
   name         String
-  description  String?                                              // texte complet affiché aux joueurs (club-house)
-  imageUrl     String?     @map("image_url")                        // affiche uploadée, affichée avec la description
-  price        Decimal     @db.Decimal(10, 2)                       // prix de vente
-  entriesCount Int?        @map("entries_count")                    // si ENTRIES
+  description  String? // texte complet affiché aux joueurs (club-house)
+  imageUrl     String?     @map("image_url") // affiche uploadée, affichée avec la description
+  price        Decimal     @db.Decimal(10, 2) // prix de vente
+  entriesCount Int?        @map("entries_count") // si ENTRIES
   walletAmount Decimal?    @map("wallet_amount") @db.Decimal(10, 2) // si WALLET : montant crédité
-  sportKeys    String[]    @default([]) @map("sport_keys")          // optionnel : [] = tous sports (affichage seulement, pas de gate fonctionnel)
-  validityDays Int?        @map("validity_days")                    // null = sans expiration
+  sportKeys    String[]    @default([]) @map("sport_keys") // optionnel : [] = tous sports (affichage seulement, pas de gate fonctionnel)
+  validityDays Int?        @map("validity_days") // null = sans expiration
   isActive     Boolean     @default(true) @map("is_active")
   createdAt    DateTime    @default(now()) @map("created_at")
   updatedAt    DateTime    @updatedAt @map("updated_at")
@@ -1008,23 +1016,23 @@ model PackageTemplate {
 
 /// Achat d'une offre par un joueur : le solde vivant (crédits ou €).
 model MemberPackage {
-  id               String    @id @default(cuid())
-  clubId           String    @map("club_id")
-  userId           String    @map("user_id")
-  templateId       String    @map("template_id")
+  id               String      @id @default(cuid())
+  clubId           String      @map("club_id")
+  userId           String      @map("user_id")
+  templateId       String      @map("template_id")
   kind             PackageKind
-  creditsTotal     Int?      @map("credits_total")
-  creditsRemaining Int?      @map("credits_remaining")
-  amountTotal      Decimal?  @map("amount_total") @db.Decimal(10, 2)
-  amountRemaining  Decimal?  @map("amount_remaining") @db.Decimal(10, 2)
-  purchasedAt      DateTime  @default(now()) @map("purchased_at")
-  expiresAt        DateTime? @map("expires_at")
+  creditsTotal     Int?        @map("credits_total")
+  creditsRemaining Int?        @map("credits_remaining")
+  amountTotal      Decimal?    @map("amount_total") @db.Decimal(10, 2)
+  amountRemaining  Decimal?    @map("amount_remaining") @db.Decimal(10, 2)
+  purchasedAt      DateTime    @default(now()) @map("purchased_at")
+  expiresAt        DateTime?   @map("expires_at")
 
-  club     Club            @relation(fields: [clubId], references: [id], onDelete: Cascade)
-  user     User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  template PackageTemplate @relation(fields: [templateId], references: [id], onDelete: Restrict)
-  salePayments        Payment[] @relation("PackageSale")
-  consumptionPayments Payment[] @relation("PackageConsumption")
+  club                Club            @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  user                User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  template            PackageTemplate @relation(fields: [templateId], references: [id], onDelete: Restrict)
+  salePayments        Payment[]       @relation("PackageSale")
+  consumptionPayments Payment[]       @relation("PackageConsumption")
 
   @@index([clubId, userId])
   @@map("member_packages")
@@ -1035,16 +1043,16 @@ model SubscriptionPlan {
   id               String              @id @default(cuid())
   clubId           String              @map("club_id")
   name             String
-  description      String?                                       // texte complet affiché aux joueurs (club-house)
-  imageUrl         String?             @map("image_url")         // affiche uploadée, affichée avec la description
-  sportKeys        String[]            @map("sport_keys")        // clés Sport couvertes (['padel'])
+  description      String? // texte complet affiché aux joueurs (club-house)
+  imageUrl         String?             @map("image_url") // affiche uploadée, affichée avec la description
+  sportKeys        String[]            @map("sport_keys") // clés Sport couvertes (['padel'])
   monthlyPrice     Decimal             @map("monthly_price") @db.Decimal(10, 2)
   commitmentMonths Int                 @map("commitment_months")
   offPeakOnly      Boolean             @default(true) @map("off_peak_only")
   benefit          SubscriptionBenefit @default(INCLUDED)
-  discountPercent  Int?                @map("discount_percent")  // si DISCOUNT (1..100)
-  dailyCap         Int?                @map("daily_cap")         // max résas couvertes / jour (null = illimité)
-  weeklyCap        Int?                @map("weekly_cap")        // max / semaine (null = illimité)
+  discountPercent  Int?                @map("discount_percent") // si DISCOUNT (1..100)
+  dailyCap         Int?                @map("daily_cap") // max résas couvertes / jour (null = illimité)
+  weeklyCap        Int?                @map("weekly_cap") // max / semaine (null = illimité)
   isActive         Boolean             @default(true) @map("is_active")
   createdAt        DateTime            @default(now()) @map("created_at")
   updatedAt        DateTime            @updatedAt @map("updated_at")
@@ -1066,19 +1074,19 @@ model Subscription {
   expiresAt            DateTime            @map("expires_at")
   status               SubscriptionStatus  @default(ACTIVE)
   monthlyPriceSnapshot Decimal             @map("monthly_price_snapshot") @db.Decimal(10, 2)
-  sportKeys            String[]            @map("sport_keys")        // snapshot
-  offPeakOnly          Boolean             @map("off_peak_only")     // snapshot
-  benefit              SubscriptionBenefit                           // snapshot
-  discountPercent      Int?                @map("discount_percent")  // snapshot
-  dailyCap             Int?                @map("daily_cap")         // snapshot
-  weeklyCap            Int?                @map("weekly_cap")        // snapshot
+  sportKeys            String[]            @map("sport_keys") // snapshot
+  offPeakOnly          Boolean             @map("off_peak_only") // snapshot
+  benefit              SubscriptionBenefit // snapshot
+  discountPercent      Int?                @map("discount_percent") // snapshot
+  dailyCap             Int?                @map("daily_cap") // snapshot
+  weeklyCap            Int?                @map("weekly_cap") // snapshot
   createdAt            DateTime            @default(now()) @map("created_at")
 
-  club     Club             @relation(fields: [clubId], references: [id], onDelete: Cascade)
-  user     User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  plan     SubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Restrict)
-  salePayments     Payment[] @relation("SubscriptionSale")
-  coveragePayments Payment[] @relation("SubscriptionCoverage")
+  club             Club             @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan             SubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Restrict)
+  salePayments     Payment[]        @relation("SubscriptionSale")
+  coveragePayments Payment[]        @relation("SubscriptionCoverage")
 
   @@index([clubId, userId])
   @@map("subscriptions")
@@ -1086,19 +1094,19 @@ model Subscription {
 
 /// Annonce publiée par un club sur sa page d'accueil.
 model Announcement {
-  id          String   @id @default(cuid())
-  clubId      String   @map("club_id")
+  id          String           @id @default(cuid())
+  clubId      String           @map("club_id")
   title       String
   body        String
-  linkUrl     String?  @map("link_url")
-  imageUrl    String?  @map("image_url")
+  linkUrl     String?          @map("link_url")
+  imageUrl    String?          @map("image_url")
   kind        AnnouncementKind @default(INFO)
   validUntil  DateTime?        @map("valid_until") /// fin d'affichage (fin de journée UTC) ; null = sans limite
-  isPublished Boolean  @default(true) @map("is_published")
-  pinned      Boolean  @default(false)
-  sortOrder   Int      @default(0) @map("sort_order")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  isPublished Boolean          @default(true) @map("is_published")
+  pinned      Boolean          @default(false)
+  sortOrder   Int              @default(0) @map("sort_order")
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
 
   club Club @relation(fields: [clubId], references: [id], onDelete: Cascade)
 
@@ -1123,18 +1131,18 @@ model ClubPhoto {
 
 /// Sponsor/partenaire affiché sur la page d'accueil d'un club.
 model Sponsor {
-  id        String   @id @default(cuid())
-  clubId    String   @map("club_id")
-  name      String
-  logoUrl   String   @map("logo_url")
-  linkUrl   String?  @map("link_url")
-  sortOrder Int      @default(0) @map("sort_order")
-  isActive  Boolean  @default(true) @map("is_active")
-  offerText String?  @map("offer_text")  /// ex. « −10 % sur les raquettes en boutique »
-  offerCode String?  @map("offer_code")  /// code promo affiché copiable côté joueur
+  id         String    @id @default(cuid())
+  clubId     String    @map("club_id")
+  name       String
+  logoUrl    String    @map("logo_url")
+  linkUrl    String?   @map("link_url")
+  sortOrder  Int       @default(0) @map("sort_order")
+  isActive   Boolean   @default(true) @map("is_active")
+  offerText  String?   @map("offer_text") /// ex. « −10 % sur les raquettes en boutique »
+  offerCode  String?   @map("offer_code") /// code promo affiché copiable côté joueur
   offerUntil DateTime? @map("offer_until") /// fin de validité de l'offre (fin de journée UTC) ; null = sans limite
-  pinned    Boolean  @default(false)     /// partenaire « à la une » : grande carte en tête de section
-  createdAt DateTime @default(now()) @map("created_at")
+  pinned     Boolean   @default(false) /// partenaire « à la une » : grande carte en tête de section
+  createdAt  DateTime  @default(now()) @map("created_at")
 
   club Club @relation(fields: [clubId], references: [id], onDelete: Cascade)
 
@@ -1148,19 +1156,19 @@ model Tournament {
   clubId               String           @map("club_id")
   clubSportId          String           @map("club_sport_id")
   name                 String
-  category             String                                   // "P25","P50","P100",…
+  category             String // "P25","P50","P100",…
   gender               TournamentGender
   openToWomen          Boolean          @default(true) @map("open_to_women") // n'a de sens que pour MEN : true = tableau "open" (toute composition) ; false = 100% hommes
   description          String?
-  contactInfo          String?          @map("contact_info")     // contact affiché quand les inscriptions sont closes (ex. Juge Arbitre)
+  contactInfo          String?          @map("contact_info") // contact affiché quand les inscriptions sont closes (ex. Juge Arbitre)
   startTime            DateTime         @map("start_time") @db.Timestamptz
   endTime              DateTime?        @map("end_time") @db.Timestamptz
   registrationDeadline DateTime         @map("registration_deadline") @db.Timestamptz
-  maxTeams             Int?             @map("max_teams")        // null = illimité
+  maxTeams             Int?             @map("max_teams") // null = illimité
   entryFee             Decimal?         @map("entry_fee") @db.Decimal(10, 2)
   requirePrepayment    Boolean          @default(false) @map("require_prepayment")
   status               TournamentStatus @default(DRAFT)
-  refereeUserId        String?          @map("referee_user_id")     // juge-arbitre désigné (facette, pas un rôle)
+  refereeUserId        String?          @map("referee_user_id") // juge-arbitre désigné (facette, pas un rôle)
   createdAt            DateTime         @default(now()) @map("created_at")
   updatedAt            DateTime         @updatedAt @map("updated_at")
 
@@ -1190,10 +1198,10 @@ enum BenchSource {
 
 /// Un binôme inscrit à un tournoi (capitaine + coéquipier, tous deux membres du club).
 model TournamentRegistration {
-  id            String             @id @default(cuid())
-  tournamentId  String             @map("tournament_id")
-  captainUserId String             @map("captain_user_id")
-  partnerUserId String             @map("partner_user_id")
+  id              String                    @id @default(cuid())
+  tournamentId    String                    @map("tournament_id")
+  captainUserId   String                    @map("captain_user_id")
+  partnerUserId   String                    @map("partner_user_id")
   status          RegistrationStatus        @default(CONFIRMED)
   paymentStatus   RegistrationPaymentStatus @default(NONE) @map("payment_status")
   paymentDeadline DateTime?                 @map("payment_deadline") @db.Timestamptz
@@ -1201,8 +1209,8 @@ model TournamentRegistration {
   cancelledAt     DateTime?                 @map("cancelled_at")
   createdAt       DateTime                  @default(now()) @map("created_at") // = ordre liste d'attente
   updatedAt       DateTime                  @updatedAt @map("updated_at")
-  captainPresence TournamentPresence @default(UNSEEN) @map("captain_presence")
-  partnerPresence TournamentPresence @default(UNSEEN) @map("partner_presence")
+  captainPresence TournamentPresence        @default(UNSEEN) @map("captain_presence")
+  partnerPresence TournamentPresence        @default(UNSEEN) @map("partner_presence")
 
   tournament Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
   captain    User       @relation("CaptainRegistrations", fields: [captainUserId], references: [id], onDelete: Restrict)
@@ -1217,12 +1225,12 @@ model TournamentRegistration {
 
 /// Le banc : joueurs seuls en attente d'une place (forfait du coéquipier, ou retardataire).
 model TournamentBenchEntry {
-  id           String     @id @default(cuid())
-  tournamentId String     @map("tournament_id")
-  userId       String     @map("user_id")
+  id           String      @id @default(cuid())
+  tournamentId String      @map("tournament_id")
+  userId       String      @map("user_id")
   source       BenchSource
-  addedById    String?    @map("added_by_id")
-  createdAt    DateTime   @default(now()) @map("created_at")
+  addedById    String?     @map("added_by_id")
+  createdAt    DateTime    @default(now()) @map("created_at")
 
   tournament Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
   user       User       @relation("TournamentBenchUser", fields: [userId], references: [id], onDelete: Cascade)
@@ -1259,16 +1267,16 @@ model ClubEvent {
   startTime            DateTime        @map("start_time") @db.Timestamptz
   endTime              DateTime?       @map("end_time") @db.Timestamptz
   registrationDeadline DateTime        @map("registration_deadline") @db.Timestamptz
-  capacity             Int?                                            // null = illimité
-  price                Decimal?        @db.Decimal(10, 2)              // informatif — règlement au club
+  capacity             Int? // null = illimité
+  price                Decimal?        @db.Decimal(10, 2) // informatif — règlement au club
   requirePrepayment    Boolean         @default(false) @map("require_prepayment")
   memberOnly           Boolean         @default(true) @map("member_only")
   status               ClubEventStatus @default(DRAFT)
   createdAt            DateTime        @default(now()) @map("created_at")
   updatedAt            DateTime        @updatedAt @map("updated_at")
 
-  clubSportId   String?             @map("club_sport_id")
-  seriesId      String?             @map("series_id") // récurrence hebdo (mêlée récurrente) — null = event ponctuel
+  clubSportId String? @map("club_sport_id")
+  seriesId    String? @map("series_id") // récurrence hebdo (mêlée récurrente) — null = event ponctuel
 
   club          Club                @relation(fields: [clubId], references: [id], onDelete: Cascade)
   clubSport     ClubSport?          @relation(fields: [clubSportId], references: [id], onDelete: Restrict)
@@ -1284,25 +1292,25 @@ model ClubEvent {
 /// Génère des `ClubEvent` normaux (ClubEvent.seriesId) — la série ne sert qu'à la génération
 /// initiale et aux actions de gestion en bloc (prolonger / annuler).
 model ClubEventSeries {
-  id                  String    @id @default(cuid())
-  clubId              String    @map("club_id")
+  id                  String        @id @default(cuid())
+  clubId              String        @map("club_id")
   name                String
   kind                ClubEventKind
   description         String?
   capacity            Int?
-  price               Decimal?  @db.Decimal(10, 2)
-  memberOnly          Boolean   @default(true) @map("member_only")
-  requirePrepayment   Boolean   @default(false) @map("require_prepayment")
-  clubSportId         String?   @map("club_sport_id")
-  weekday             Int                                    // 1=lundi … 7=dimanche (Luxon)
-  startLocal          String    @map("start_local")          // "HH:mm"
-  durationMin         Int       @map("duration_min")
-  deadlineLeadMinutes Int       @map("deadline_lead_minutes") // clôture = début − ce délai
-  startDate           DateTime  @map("start_date") @db.Date
-  endDate             DateTime  @map("end_date") @db.Date
-  cancelledAt         DateTime? @map("cancelled_at")
-  createdAt           DateTime  @default(now()) @map("created_at")
-  updatedAt           DateTime  @updatedAt @map("updated_at")
+  price               Decimal?      @db.Decimal(10, 2)
+  memberOnly          Boolean       @default(true) @map("member_only")
+  requirePrepayment   Boolean       @default(false) @map("require_prepayment")
+  clubSportId         String?       @map("club_sport_id")
+  weekday             Int // 1=lundi … 7=dimanche (Luxon)
+  startLocal          String        @map("start_local") // "HH:mm"
+  durationMin         Int           @map("duration_min")
+  deadlineLeadMinutes Int           @map("deadline_lead_minutes") // clôture = début − ce délai
+  startDate           DateTime      @map("start_date") @db.Date
+  endDate             DateTime      @map("end_date") @db.Date
+  cancelledAt         DateTime?     @map("cancelled_at")
+  createdAt           DateTime      @default(now()) @map("created_at")
+  updatedAt           DateTime      @updatedAt @map("updated_at")
 
   club   Club        @relation(fields: [clubId], references: [id], onDelete: Cascade)
   events ClubEvent[]
@@ -1314,9 +1322,9 @@ model ClubEventSeries {
 /// Inscription individuelle d'un joueur à un ClubEvent. Une seule ligne par joueur
 /// (@@unique) : la réinscription après annulation met à jour la ligne existante.
 model EventRegistration {
-  id          String             @id @default(cuid())
-  eventId     String             @map("event_id")
-  userId      String             @map("user_id")
+  id              String                    @id @default(cuid())
+  eventId         String                    @map("event_id")
+  userId          String                    @map("user_id")
   status          RegistrationStatus        @default(CONFIRMED)
   paymentStatus   RegistrationPaymentStatus @default(NONE) @map("payment_status")
   paymentDeadline DateTime?                 @map("payment_deadline") @db.Timestamptz
@@ -1348,9 +1356,9 @@ model Coach {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  club   Club                @relation(fields: [clubId], references: [id], onDelete: Cascade)
-  user   User?               @relation(fields: [userId], references: [id], onDelete: SetNull)
-  series ReservationSeries[]
+  club    Club                @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  user    User?               @relation(fields: [userId], references: [id], onDelete: SetNull)
+  series  ReservationSeries[]
   lessons Lesson[]
 
   @@unique([clubId, userId])
@@ -1362,28 +1370,28 @@ model Coach {
 /// Les colonnes « cours » (coachId/capacity/lessonKind/allowSelfEnroll/enrollmentMode) sont posées
 /// dès maintenant mais exploitées au Lot 2 — null/false en Lot 1.
 model ReservationSeries {
-  id          String          @id @default(cuid())
-  clubId      String          @map("club_id")
-  resourceId  String          @map("resource_id")
-  type        ReservationType @default(COURT)
-  title       String?
-  weekday     Int                                    // 1=lundi … 7=dimanche (Luxon)
-  startLocal  String          @map("start_local")
-  durationMin Int             @map("duration_min")
-  startDate   DateTime        @map("start_date") @db.Date
-  endDate     DateTime        @map("end_date") @db.Date
+  id              String          @id @default(cuid())
+  clubId          String          @map("club_id")
+  resourceId      String          @map("resource_id")
+  type            ReservationType @default(COURT)
+  title           String?
+  weekday         Int // 1=lundi … 7=dimanche (Luxon)
+  startLocal      String          @map("start_local")
+  durationMin     Int             @map("duration_min")
+  startDate       DateTime        @map("start_date") @db.Date
+  endDate         DateTime        @map("end_date") @db.Date
   coachId         String?         @map("coach_id")
   capacity        Int?
   lessonKind      LessonKind?     @map("lesson_kind")
   allowSelfEnroll Boolean         @default(false) @map("allow_self_enroll")
   enrollmentMode  EnrollmentMode? @map("enrollment_mode")
-  cancelledAt DateTime?       @map("cancelled_at")
-  createdAt   DateTime        @default(now()) @map("created_at")
-  updatedAt   DateTime        @updatedAt @map("updated_at")
+  cancelledAt     DateTime?       @map("cancelled_at")
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
 
-  club         Club          @relation(fields: [clubId], references: [id], onDelete: Cascade)
-  resource     Resource      @relation(fields: [resourceId], references: [id], onDelete: Restrict)
-  coach        Coach?        @relation(fields: [coachId], references: [id], onDelete: SetNull)
+  club         Club               @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  resource     Resource           @relation(fields: [resourceId], references: [id], onDelete: Restrict)
+  coach        Coach?             @relation(fields: [coachId], references: [id], onDelete: SetNull)
   reservations Reservation[]
   lessons      Lesson[]
   enrollments  LessonEnrollment[]
@@ -1411,6 +1419,7 @@ model Lesson {
   coach       Coach              @relation(fields: [coachId], references: [id], onDelete: Restrict)
   series      ReservationSeries? @relation(fields: [seriesId], references: [id], onDelete: SetNull)
   enrollments LessonEnrollment[]
+
   @@index([clubId])
   @@index([seriesId])
   @@map("lessons")
@@ -1429,6 +1438,7 @@ model LessonEnrollment {
   lesson Lesson?            @relation(fields: [lessonId], references: [id], onDelete: Cascade)
   series ReservationSeries? @relation(fields: [seriesId], references: [id], onDelete: Cascade)
   user   User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@unique([lessonId, userId])
   @@unique([seriesId, userId])
   @@index([lessonId, status, createdAt])
@@ -1467,17 +1477,17 @@ enum NotificationChannel {
 /// Notification in-app (source de vérité de la cloche). Créée par le dispatcher pour
 /// chaque destinataire dont le canal INAPP est actif. clubId = contexte (sans FK, léger).
 model Notification {
-  id        String   @id @default(cuid())
-  userId    String   @map("user_id")
-  clubId    String?  @map("club_id")
+  id        String               @id @default(cuid())
+  userId    String               @map("user_id")
+  clubId    String?              @map("club_id")
   category  NotificationCategory
   type      String
   title     String
   body      String
   url       String?
   data      Json?
-  readAt    DateTime? @map("read_at")
-  createdAt DateTime @default(now()) @map("created_at")
+  readAt    DateTime?            @map("read_at")
+  createdAt DateTime             @default(now()) @map("created_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -1495,7 +1505,7 @@ model LegalAcceptance {
   clubId     String?       @map("club_id")
   document   LegalDocument
   version    String
-  context    String        // 'register' | 'club_create' | 'update_banner'
+  context    String // 'register' | 'club_create' | 'update_banner'
   acceptedAt DateTime      @default(now()) @map("accepted_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -1507,8 +1517,8 @@ model LegalAcceptance {
 /// Écart au défaut (opt-out) : une ligne = ce canal explicitement (dés)activé pour cette
 /// catégorie. Pas de ligne = canal activé. CLUB_MESSAGES+INAPP n'est jamais stocké (forcé ON).
 model NotificationPreference {
-  id       String  @id @default(cuid())
-  userId   String  @map("user_id")
+  id       String               @id @default(cuid())
+  userId   String               @map("user_id")
   category NotificationCategory
   channel  NotificationChannel
   enabled  Boolean
@@ -1634,8 +1644,8 @@ model OpenMatchMessage {
   deletedAt     DateTime? @map("deleted_at")
   deletedById   String?   @map("deleted_by_id")
 
-  reservation Reservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
-  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reservation Reservation     @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  user        User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   reports     MessageReport[]
 
   @@index([reservationId, createdAt])
@@ -1646,19 +1656,19 @@ model OpenMatchMessage {
 /// à son niveau s'ouvre — ou libère une place — dans une fenêtre horaire précise.
 /// Active tant que windowEnd > now (pas de champ statut) ; purgée par le job minute.
 model MatchAlert {
-  id          String   @id @default(cuid())
-  userId      String   @map("user_id")
-  clubId      String   @map("club_id")
-  windowStart DateTime @map("window_start") @db.Timestamptz
-  windowEnd   DateTime @map("window_end") @db.Timestamptz
+  id             String   @id @default(cuid())
+  userId         String   @map("user_id")
+  clubId         String   @map("club_id")
+  windowStart    DateTime @map("window_start") @db.Timestamptz
+  windowEnd      DateTime @map("window_end") @db.Timestamptz
   // Fourchette de niveau optionnelle (1–8) : si posée, l'alerte cible les parties dont
   // la fourchette chevauche celle-ci ; null = « à mon niveau » (niveau calculé du joueur).
-  targetLevelMin Float? @map("target_level_min")
-  targetLevelMax Float? @map("target_level_max")
-  createdAt   DateTime @default(now()) @map("created_at")
+  targetLevelMin Float?   @map("target_level_min")
+  targetLevelMax Float?   @map("target_level_max")
+  createdAt      DateTime @default(now()) @map("created_at")
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  club Club @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  user User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  club Club            @relation(fields: [clubId], references: [id], onDelete: Cascade)
   hits MatchAlertHit[]
 
   @@index([clubId, windowEnd])
@@ -1690,7 +1700,7 @@ model Follow {
   followingId String   @map("following_id")
   createdAt   DateTime @default(now()) @map("created_at")
 
-  follower  User @relation("FollowsGiven",    fields: [followerId],  references: [id], onDelete: Cascade)
+  follower  User @relation("FollowsGiven", fields: [followerId], references: [id], onDelete: Cascade)
   following User @relation("FollowsReceived", fields: [followingId], references: [id], onDelete: Cascade)
 
   @@unique([followerId, followingId])
@@ -1732,8 +1742,8 @@ model Conversation {
   createdAt     DateTime  @default(now()) @map("created_at")
   lastMessageAt DateTime? @map("last_message_at") // tri de la boîte de réception
 
-  userA        User @relation("ConversationsAsA", fields: [userAId], references: [id], onDelete: Cascade)
-  userB        User @relation("ConversationsAsB", fields: [userBId], references: [id], onDelete: Cascade)
+  userA        User                      @relation("ConversationsAsA", fields: [userAId], references: [id], onDelete: Cascade)
+  userB        User                      @relation("ConversationsAsB", fields: [userBId], references: [id], onDelete: Cascade)
   participants ConversationParticipant[]
   messages     DirectMessage[]
 
@@ -1771,8 +1781,8 @@ model DirectMessage {
   deletedAt      DateTime? @map("deleted_at")
   deletedById    String?   @map("deleted_by_id")
 
-  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  author       User         @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  conversation Conversation      @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  author       User              @relation(fields: [authorId], references: [id], onDelete: Cascade)
   reactions    MessageReaction[]
   reports      MessageReport[]
 
@@ -1817,7 +1827,7 @@ model PlatformSubscription {
   clubId               String    @unique @map("club_id")
   stripeSubscriptionId String    @unique @map("stripe_subscription_id")
   status               String // miroir Stripe : active, past_due, canceled, trialing, unpaid…
-  tier                 Int    // palier souscrit (1-4)
+  tier                 Int // palier souscrit (1-4)
   interval             String // 'month' | 'year'
   currentPeriodEnd     DateTime? @map("current_period_end")
   cancelAtPeriodEnd    Boolean   @default(false) @map("cancel_at_period_end")

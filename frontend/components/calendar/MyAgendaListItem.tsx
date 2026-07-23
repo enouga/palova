@@ -2,9 +2,9 @@
 
 import { useTheme } from '@/lib/ThemeProvider';
 import { ACCENTS } from '@/lib/theme';
-import { Chip } from '@/components/ui/atoms';
+import { CardStripe, Chip } from '@/components/ui/atoms';
 import { Icon } from '@/components/ui/Icon';
-import { AgendaListItem, agendaKindMeta, agendaItemClubSlug, STATUS_LABEL, REG_LABEL, GENDER_LABEL } from '@/lib/calendar';
+import { AgendaListItem, agendaKindMeta, agendaItemClub, agendaItemClubSlug, clubMarker, STATUS_LABEL, REG_LABEL, GENDER_LABEL } from '@/lib/calendar';
 import { MyReservation } from '@/lib/api';
 import { isCancellationOpen } from '@/lib/reservations';
 import { clubUrl } from '@/lib/clubUrl';
@@ -49,8 +49,12 @@ export function MyAgendaListItem({ item, now, localSlug, token, onCancel, onPlay
   const sportPrefix = sportName ? `${sportName} · ` : '';
   const color = agendaKindMeta(item.kind).color;
   const itemSlug = agendaItemClubSlug(item);
-  // Les cours (lesson) n'ont pas de slug de club — jamais « étrangers ».
+  // Les cours restent hors « étranger » (leur lien /cours/{id} est same-origin), mais
+  // portent le marqueur club comme les autres kinds — présentation seule.
   const isForeign = item.kind !== 'lesson' && localSlug != null && itemSlug !== localSlug;
+  // Marqueur « autre club » : liseré + chip à l'accentColor du club de l'entrée
+  // (toutes les entrées sur la plateforme, seules les étrangères sur un hôte club).
+  const marker = clubMarker(agendaItemClub(item), localSlug);
   const tz = item.kind === 'reservation' ? item.r.resource.club.timezone
     : item.kind === 'tournament' ? item.reg.tournament.club.timezone
     : item.kind === 'lesson' ? item.enrollment.lesson.club.timezone
@@ -63,6 +67,9 @@ export function MyAgendaListItem({ item, now, localSlug, token, onCancel, onPlay
 
   const title = { fontFamily: th.fontUI, fontWeight: 700, fontSize: 16, color: th.text } as const;
   const subtitle = { fontFamily: th.fontUI, fontSize: 13, color: th.textMute, marginTop: 3 } as const;
+  // Sous-titre porteur de la chip club : flex + wrap (la chip est nowrap, le wrap évite tout débordement mobile).
+  const subtitleRow = { ...subtitle, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6 } as const;
+  const clubChip = marker ? <Chip color={marker.accent}>{marker.name}</Chip> : null;
   const metaRow = { display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginTop: 9, fontFamily: th.fontUI, fontSize: 13, color: th.textMute } as const;
   const headRow = { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 } as const;
   const linkStyle = { marginLeft: 'auto', textDecoration: 'none', borderRadius: 9, padding: '6px 12px', background: th.ink, color: th.mode === 'floodlit' ? th.text : '#f7f5ee', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 700, whiteSpace: 'nowrap' } as const;
@@ -82,6 +89,7 @@ export function MyAgendaListItem({ item, now, localSlug, token, onCancel, onPlay
           reservation={r} past={item.past} showSport={showSport} showDate token={token} now={now}
           onCancel={onCancel} onPlayersChanged={onPlayersChanged} onOpenChat={onOpenChat}
           onRecordResult={onRecordResult} canRecord={canRecord} existingMatchStatus={existingMatchStatus}
+          clubMarker={marker}
         />
       );
     } else {
@@ -94,7 +102,9 @@ export function MyAgendaListItem({ item, now, localSlug, token, onCancel, onPlay
             <span style={title}>{r.resource.name}</span>
             <Chip tone={r.status === 'CONFIRMED' ? 'accent' : 'line'}>{STATUS_LABEL[r.status]}</Chip>
           </div>
-          <div style={subtitle}>{sportPrefix}{r.resource.club.name}</div>
+          {marker
+            ? <div style={subtitleRow}>{sportName && <span>{sportName} ·</span>}{clubChip}</div>
+            : <div style={subtitle}>{sportPrefix}{r.resource.club.name}</div>}
           <div style={metaRow}>
             <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><Icon name="calendar" size={14} color={th.textMute} />{fmtDate(r.startTime, tz)} · {fmtHour(r.startTime, tz)}–{fmtHour(r.endTime, tz)}</span>
             <span style={{ fontFamily: th.fontMono }}>{Number(r.totalPrice)}€</span>
@@ -148,7 +158,9 @@ export function MyAgendaListItem({ item, now, localSlug, token, onCancel, onPlay
           <span style={title}>Cours · {lesson.coach.name} · {res.resource.name}</span>
           <Chip color={color}>{item.enrollment.status === 'CONFIRMED' ? 'Inscrit' : item.enrollment.status}</Chip>
         </div>
-        {sportName && <div style={subtitle}>{sportName}</div>}
+        {marker
+          ? <div style={subtitleRow}>{sportName && <span>{sportName} ·</span>}{clubChip}</div>
+          : sportName && <div style={subtitle}>{sportName}</div>}
         <div style={metaRow}>
           <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
             <Icon name="calendar" size={14} color={th.textMute} />{fmtDate(res.startTime, tz)} · {fmtHour(res.startTime, tz)}–{fmtHour(res.endTime, tz)}
@@ -165,7 +177,9 @@ export function MyAgendaListItem({ item, now, localSlug, token, onCancel, onPlay
           <span style={title}>{t.name}</span>
           <Chip color={color}>{REG_LABEL[item.reg.status] ?? item.reg.status}</Chip>
         </div>
-        <div style={subtitle}>{sportPrefix}{t.category} · {GENDER_LABEL[t.gender] ?? t.gender} · {t.club.name}</div>
+        {marker
+          ? <div style={subtitleRow}><span>{sportPrefix}{t.category} · {GENDER_LABEL[t.gender] ?? t.gender}</span>{clubChip}</div>
+          : <div style={subtitle}>{sportPrefix}{t.category} · {GENDER_LABEL[t.gender] ?? t.gender} · {t.club.name}</div>}
         <div style={metaRow}>
           <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><Icon name="calendar" size={14} color={th.textMute} />{fmtDate(t.startTime, tz)}{t.endTime && ` – ${fmtDate(t.endTime, tz)}`} · {fmtHour(t.startTime, tz)}</span>
           {isForeign ? goHint : <a href={clubUrl(t.club.slug, `/tournois/${t.id}`)} style={linkStyle}>Voir</a>}
@@ -180,7 +194,9 @@ export function MyAgendaListItem({ item, now, localSlug, token, onCancel, onPlay
           <span style={title}>{ev.name}</span>
           <Chip color={color}>{REG_LABEL[item.ev.status] ?? item.ev.status}</Chip>
         </div>
-        <div style={subtitle}>{sportPrefix}{KIND_LABEL[ev.kind]} · {ev.club.name}</div>
+        {marker
+          ? <div style={subtitleRow}><span>{sportPrefix}{KIND_LABEL[ev.kind]}</span>{clubChip}</div>
+          : <div style={subtitle}>{sportPrefix}{KIND_LABEL[ev.kind]} · {ev.club.name}</div>}
         <div style={metaRow}>
           <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><Icon name="calendar" size={14} color={th.textMute} />{fmtDate(ev.startTime, tz)}{ev.endTime && ` – ${fmtDate(ev.endTime, tz)}`} · {fmtHour(ev.startTime, tz)}</span>
           {isForeign ? goHint : <a href={clubUrl(ev.club.slug, `/events/${ev.id}`)} style={linkStyle}>Voir</a>}
@@ -189,10 +205,15 @@ export function MyAgendaListItem({ item, now, localSlug, token, onCancel, onPlay
     );
   }
 
-  // Même chrome que les cartes de Parties (OpenMatchCard) : pas de barre de couleur latérale.
-  const cardStyle = { background: th.surface, borderRadius: 20, padding: 16, boxShadow: `inset 0 0 0 1px ${th.line}`, opacity: item.past ? 0.7 : 1 } as const;
+  // Même chrome que les cartes de Parties (OpenMatchCard) : pas de barre de couleur latérale,
+  // SAUF le liseré du marqueur « autre club » (relative + overflow:hidden pour épouser le borderRadius).
+  const cardStyle = {
+    background: th.surface, borderRadius: 20, padding: 16, boxShadow: `inset 0 0 0 1px ${th.line}`, opacity: item.past ? 0.7 : 1,
+    ...(marker ? { position: 'relative' as const, overflow: 'hidden' as const } : null),
+  } as const;
+  const stripe = marker ? <CardStripe color={marker.accent} /> : null;
 
   return isForeign
-    ? <a href={foreignHref} style={{ ...cardStyle, textDecoration: 'none', color: 'inherit' }}>{body}</a>
-    : <div style={cardStyle}>{body}</div>;
+    ? <a href={foreignHref} style={{ ...cardStyle, textDecoration: 'none', color: 'inherit' }}>{stripe}{body}</a>
+    : <div style={cardStyle}>{stripe}{body}</div>;
 }

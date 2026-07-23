@@ -9,14 +9,18 @@ const GENDER_LABEL: Record<string, string> = { MEN: 'Messieurs', WOMEN: 'Dames',
 // `multiSport` (club à ≥2 sports) → pill sport en tête. Les faits (horaire,
 // clôture, prix, juge-arbitre) sont intégrés en pied de hero (`meta`) — la
 // rangée de cartes séparée a été fondue dans le bloc.
-export function TournamentHero({ t, now, multiSport = false }: { t: TournamentDetail; now: Date | null; multiSport?: boolean }) {
+export function TournamentHero({ t, now, multiSport = false, onContactReferee }: { t: TournamentDetail; now: Date | null; multiSport?: boolean; onContactReferee?: () => void }) {
   const tz = t.club.timezone;
   const meta: MetaCard[] = [
     { icon: 'calendar', label: t.endTime ? 'Horaire' : 'Début', value: formatDateShortTimeRange(t.startTime, t.endTime, tz) },
     { icon: 'clock', label: 'Clôture', value: formatDateTimeShort(t.registrationDeadline, tz) },
     ...(t.entryFee ? [{ icon: 'euro', label: 'Inscription', value: `${t.entryFee} € / binôme` } as MetaCard] : []),
     // Nom seul : le J/A répond du tournoi, mais ses coordonnées restent l'affaire de `contactInfo`.
-    ...(t.referee ? [{ icon: 'whistle', label: 'Juge-arbitre', value: t.referee.name } as MetaCard] : []),
+    // `onContactReferee` (fourni par la page ssi contactable + inscrit) → action « Contacter ».
+    ...(t.referee ? [{
+      icon: 'whistle', label: 'Juge-arbitre', value: t.referee.name,
+      ...(onContactReferee ? { action: { label: 'Contacter', onClick: onContactReferee } } : {}),
+    } as MetaCard] : []),
   ];
   return (
     <AgendaHero

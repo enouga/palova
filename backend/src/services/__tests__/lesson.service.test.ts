@@ -346,6 +346,29 @@ describe('LessonService.listUserEnrollments', () => {
     expect(list.length).toBe(2);
     expect(list.every((x) => x.enrollmentId === 'e1')).toBe(true);
   });
+
+  it('listUserEnrollments demande accentColor du club (marqueur multi-clubs)', async () => {
+    prismaMock.lessonEnrollment.findMany.mockResolvedValue([
+      { id: 'e1', status: 'CONFIRMED', lessonId: null, seriesId: 's1' },
+    ] as any);
+    prismaMock.lesson.findMany.mockResolvedValue([
+      {
+        id: 'occ1', clubId: 'club-demo', capacity: 4, allowSelfEnroll: true, seriesId: 's1',
+        series: { id: 's1', capacity: 4, enrollmentMode: 'SERIES', title: 'Cours' },
+        coach: { name: 'Coach C', photoUrl: null },
+        reservation: { startTime: new Date(Date.now() + 86400000), endTime: new Date(Date.now() + 90000000), resource: { name: 'T1' } },
+        club: { slug: 'club-demo', name: 'Club Démo', timezone: 'Europe/Paris', accentColor: '#bda6ff' },
+      },
+    ] as any);
+    (prismaMock.lessonEnrollment.groupBy as jest.Mock).mockResolvedValue([]);
+
+    const list = await lessonService.listUserEnrollments('u1');
+
+    expect((list[0].lesson.club as Record<string, unknown>).accentColor).toBe('#bda6ff');
+    const calls = (prismaMock.lesson.findMany as jest.Mock).mock.calls;
+    const args = calls[calls.length - 1][0] as any;
+    expect(args.include.club.select.accentColor).toBe(true);
+  });
 });
 
 describe('LessonService — espace coach', () => {
