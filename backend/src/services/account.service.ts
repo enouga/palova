@@ -68,6 +68,7 @@ export class AccountService {
           firstName: 'Joueur', lastName: 'supprimé',
           email: `deleted-${userId}@deleted.palova.invalid`,
           phone: null, avatarUrl: null, birthDate: null, sex: null, locale: null,
+          address: null, postalCode: null, city: null,
           password: randomPassword, isSuperAdmin: false, deletedAt: new Date(),
         },
       });
