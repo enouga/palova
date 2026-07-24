@@ -772,7 +772,7 @@ export const api = {
   acceptLegal: (document: LegalDocumentKey, token: string) =>
     request<{ ok: boolean }>('/api/me/legal/accept', { method: 'POST', body: JSON.stringify({ document }) }, token),
 
-  updateMyProfile: (body: { phone?: string | null; sex?: Sex | null; birthDate?: string | null; locale?: string | null; showInLeaderboard?: boolean; autoMatchProposals?: boolean; acceptsFriendRequests?: boolean; acceptsDirectMessages?: boolean; preferredSportId?: string | null }, token: string) =>
+  updateMyProfile: (body: { phone?: string | null; pseudo?: string | null; sex?: Sex | null; birthDate?: string | null; locale?: string | null; showInLeaderboard?: boolean; autoMatchProposals?: boolean; acceptsFriendRequests?: boolean; acceptsDirectMessages?: boolean; preferredSportId?: string | null }, token: string) =>
     request<MyProfile>('/api/me', { method: 'PATCH', body: JSON.stringify(body) }, token),
 
   // --- Niveau Glicko-2 ---
@@ -1728,6 +1728,7 @@ export interface OpenMatchPlayer {
   userId: string;
   firstName: string;
   lastName: string;
+  pseudo?: string | null;
   avatarUrl: string | null;
   isOrganizer: boolean;
   level?: UserLevel | null;
@@ -1761,7 +1762,7 @@ export interface OpenMatch {
 
 export interface OpenMatchMessage {
   id: string;
-  author: { userId: string; firstName: string; lastName: string; avatarUrl: string | null };
+  author: { userId: string; firstName: string; lastName: string; avatarUrl: string | null; pseudo?: string | null };
   body: string;
   createdAt: string;
   deleted: boolean;
@@ -2542,6 +2543,7 @@ export interface MyProfile {
   email: string;
   firstName: string;
   lastName: string;
+  pseudo: string | null;
   phone: string | null;
   sex: Sex | null;
   birthDate: string | null;
