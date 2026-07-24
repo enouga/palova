@@ -1591,6 +1591,50 @@ describe('ClubService — updateMembership (profil élargi)', () => {
     prismaMock.memberNote.create.mockRejectedValue(new Error('db down'));
     await expect(new ClubService().updateMembership('club-demo', 'mb1', { phone: '06' }, 'staff-1')).resolves.toBeDefined();
   });
+
+  it('écrit le pseudo (trim) après vérif de format et d’unicité', async () => {
+    prismaMock.user.findFirst.mockResolvedValue(null);
+    await new ClubService().updateMembership('club-demo', 'mb1', { pseudo: ' SmashMaster ' } as any);
+    expect(prismaMock.user.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: { pseudo: { equals: 'SmashMaster', mode: 'insensitive' }, NOT: { id: 'u1' } },
+    }));
+    expect(prismaMock.user.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'u1' }, data: expect.objectContaining({ pseudo: 'SmashMaster' }),
+    }));
+  });
+
+  it('exclut le MEMBRE ÉDITÉ (pas l’acteur staff) du contrôle d’unicité du pseudo', async () => {
+    prismaMock.user.findFirst.mockResolvedValue(null);
+    await new ClubService().updateMembership('club-demo', 'mb1', { pseudo: 'SmashMaster' } as any, 'staff-1');
+    expect(prismaMock.user.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: { pseudo: { equals: 'SmashMaster', mode: 'insensitive' }, NOT: { id: 'u1' } },
+    }));
+  });
+
+  it('rejette un pseudo au format invalide (PSEUDO_INVALID)', async () => {
+    await expect(new ClubService().updateMembership('club-demo', 'mb1', { pseudo: 'a b' } as any)).rejects.toThrow('PSEUDO_INVALID');
+    expect(prismaMock.user.update).not.toHaveBeenCalled();
+  });
+
+  it('rejette un pseudo déjà pris par un AUTRE joueur (PSEUDO_TAKEN)', async () => {
+    prismaMock.user.findFirst.mockResolvedValue({ id: 'other' } as any);
+    await expect(new ClubService().updateMembership('club-demo', 'mb1', { pseudo: 'SmashMaster' } as any)).rejects.toThrow('PSEUDO_TAKEN');
+    expect(prismaMock.user.update).not.toHaveBeenCalled();
+  });
+
+  it('efface le pseudo avec une chaîne vide ou null (pas de vérif d’unicité)', async () => {
+    await new ClubService().updateMembership('club-demo', 'mb1', { pseudo: '   ' } as any);
+    expect(prismaMock.user.findFirst).not.toHaveBeenCalled();
+    expect(prismaMock.user.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ pseudo: null }) }));
+  });
+
+  it('trace la modification du pseudo par une note automatique', async () => {
+    prismaMock.user.findFirst.mockResolvedValue(null);
+    await new ClubService().updateMembership('club-demo', 'mb1', { pseudo: 'SmashMaster' } as any, 'staff-1');
+    expect(prismaMock.memberNote.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ body: expect.stringContaining('pseudo') }),
+    });
+  });
 });
 
 describe('ClubService — facette juge-arbitre', () => {

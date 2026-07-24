@@ -12,6 +12,7 @@ import { computeResultStats, ResultStats } from './rating/resultStats';
 import { resolvePreferredSportKey } from './rating/preferredSport';
 import { geocodeAddress, haversineKm } from './geo.service';
 import { siretIsValidFormat, checkSiret } from './siret.service';
+import { normalizePseudo } from './pseudo';
 import { LEGAL_VERSIONS } from '../content/legalVersions';
 import { sendMail } from '../email/mailer';
 import { buildNewClubEmail } from '../email/templates/clubLifecycle';
@@ -740,7 +741,7 @@ export class ClubService {
   // identifiant de connexion, n'en fait jamais partie. Libellés pour la note de traçage.
   private static readonly USER_FIELD_LABELS: Record<string, string> = {
     firstName: 'prénom', lastName: 'nom', phone: 'téléphone', birthDate: 'date de naissance',
-    sex: 'sexe', address: 'adresse', postalCode: 'code postal', city: 'ville',
+    sex: 'sexe', address: 'adresse', postalCode: 'code postal', city: 'ville', pseudo: 'pseudo',
   };
 
   async updateMembership(
@@ -750,6 +751,7 @@ export class ClubService {
       phone?: string | null; firstName?: string; lastName?: string;
       birthDate?: string | null; sex?: 'MALE' | 'FEMALE' | null;
       address?: string | null; postalCode?: string | null; city?: string | null;
+      pseudo?: string | null;
     },
     actorUserId?: string,
   ) {
@@ -771,6 +773,11 @@ export class ClubService {
       const v = params[key]?.toString().trim() ?? '';
       if (!v) throw new Error('VALIDATION_ERROR'); // un compte garde toujours un nom (jamais null/vide)
       userData[key] = v; touched.push(key);
+    }
+    if (params.pseudo !== undefined) {
+      // Exclut le MEMBRE ÉDITÉ (m.userId), jamais l'acteur staff — c'est lui qui va porter la valeur.
+      userData.pseudo = await normalizePseudo(params.pseudo, m.userId);
+      touched.push('pseudo');
     }
     if (params.birthDate !== undefined) {
       if (params.birthDate === null) userData.birthDate = null;
