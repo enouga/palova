@@ -48,6 +48,14 @@ export function inkOn(hex: string): string {
   return L > 0.45 ? '#15140f' : '#f7f6f0';
 }
 
+/** Assombrit une couleur hex (facteur 0..1 appliqué à chaque canal) — rend un accent pastel
+ *  lisible en TEXTE sur fond clair (tag des cartes d'agenda) ; en floodlit on garde l'accent plein. */
+export function darkenHex(hex: string, factor: number): string {
+  const h = hex.replace('#', '');
+  const c = (i: number) => Math.round(parseInt(h.slice(i, i + 2), 16) * factor).toString(16).padStart(2, '0');
+  return `#${c(0)}${c(2)}${c(4)}`;
+}
+
 export interface Theme {
   mode: ThemeMode;
   accent: string;
