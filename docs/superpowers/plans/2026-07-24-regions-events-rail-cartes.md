@@ -21,11 +21,18 @@
 
 ---
 
-### Task 1 : Helper `darkenHex` (teinte de tag lisible en mode clair)
+### Task 1 : Helper de teinte de tag lisible en mode clair — SUPERSEDED
 
-**Files:**
-- Modify: `frontend/lib/theme.ts` (après `inkOn`, ~ligne 50)
-- Test: `frontend/__tests__/darkenHex.test.ts` (create)
+**Statut : retiré en cours d'exécution (revue de qualité).** `frontend/lib/theme.ts` a déjà
+une fonction `shade(hex: string, factor: number): string` (juste avant `inkOn`) qui fait
+exactement le même calcul et sert déjà au même usage ailleurs (`memberCardUi.tsx`,
+`admin/layout.tsx` : assombrir un accent pour un texte lisible sur fond clair). Le
+`darkenHex` initialement prévu ici en était un doublon pur. **Utiliser `shade(accent, 0.58)`
+directement dans Task 4** — aucun nouveau helper à créer. Cette tâche ne produit plus de
+changement de code (le commit `feat(theme): darkenHex…` a été suivi d'un commit
+`revert(theme): retirer darkenHex — doublon de shade() existant`).
+
+<details><summary>Texte original de la tâche (archivé, ne pas exécuter)</summary>
 
 - [ ] **Step 1 : écrire le test qui échoue**
 
@@ -71,6 +78,8 @@ Expected: PASS (3 tests).
 git add frontend/lib/theme.ts frontend/__tests__/darkenHex.test.ts
 git commit -m "feat(theme): darkenHex — accent assombri lisible en texte sur fond clair"
 ```
+
+</details>
 
 ---
 
@@ -395,7 +404,7 @@ Expected: FAIL — prop `price` inconnue du type, prix rendu dans la ligne de da
 ```tsx
 'use client';
 import { useTheme } from '@/lib/ThemeProvider';
-import { ACCENTS, darkenHex, gaugeTrack } from '@/lib/theme';
+import { ACCENTS, shade, gaugeTrack } from '@/lib/theme';
 import { Icon, IconName } from '@/components/ui/Icon';
 import { deadlineCountdown } from '@/lib/tournament';
 
@@ -435,7 +444,7 @@ export function AgendaCardHeader({
   const { th } = useTheme();
   const countdown = deadline && now ? deadlineCountdown(deadline, now) : null;
   // Accent lisible en texte : assombri sur fond clair, plein en floodlit (spec §1).
-  const tagColor = th.mode === 'floodlit' ? accent : darkenHex(accent, 0.58);
+  const tagColor = th.mode === 'floodlit' ? accent : shade(accent, 0.58);
 
   return (
     <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
@@ -972,7 +981,7 @@ Run (depuis `frontend/`) :
 
 ```bash
 node node_modules/jest/bin/jest.js --runTestsByPath \
-  __tests__/darkenHex.test.ts __tests__/AgendaRail.test.tsx __tests__/AgendaCard.test.tsx \
+  __tests__/AgendaRail.test.tsx __tests__/AgendaCard.test.tsx \
   __tests__/TournamentFinder.test.tsx __tests__/DiscoverPage.test.tsx __tests__/DiscoverMatches.test.tsx \
   __tests__/ClubDirectory.test.tsx __tests__/TournamentsAlaUne.test.tsx __tests__/ClubHouse.test.tsx \
   __tests__/UpcomingTournaments.test.tsx __tests__/AnonymousView.test.tsx \
