@@ -84,18 +84,12 @@ describe('FacetPanel', () => {
     expect(screen.getByRole('button', { name: /Autour de moi/i })).toBeInTheDocument();
   });
 
-  it('pied « N résultats » rendu si resultCount fourni et filtre actif, absent sinon', () => {
+  it('le pied ne montre plus de compte de résultats (compteur unique = celui du rail)', () => {
     const state = { ...emptyCalendarState(), deptCodes: new Set(['75']) };
-    const r1 = render(
-      <ThemeProvider>
-        <FacetPanel facets={facets} state={state} resultCount={3}
-          onToggleDept={jest.fn()} onToggleCategory={jest.fn()} onToggleGender={jest.fn()}
-          onSetPreset={jest.fn()} onSetRange={jest.fn()} onToggleNearMe={jest.fn()} onClear={jest.fn()} />
-      </ThemeProvider>,
-    );
-    expect(screen.getByText('3 résultats')).toBeInTheDocument();
-    r1.unmount();
-    setup(); // aucun filtre actif → pas de pied du tout
+    const p = setup({ state });
     expect(screen.queryByText(/résultat/)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Effacer les filtres/ })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Effacer les filtres/ }));
+    expect(p.onClear).toHaveBeenCalled();
   });
 });
