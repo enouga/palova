@@ -526,6 +526,9 @@ model User {
   password              String
   firstName             String    @map("first_name")
   lastName              String    @map("last_name")
+  /// Pseudo optionnel, unique sur la plateforme (insensible à la casse, vérifié en
+  /// appli) — affiché à la place du prénom/nom dans les parties ouvertes quand renseigné.
+  pseudo                String?   @unique @db.VarChar(20)
   phone                 String?
   sex                   Sex?
   birthDate             DateTime? @map("birth_date") @db.Date
