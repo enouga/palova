@@ -247,7 +247,7 @@ describe('getMemberHistory — enrichissements fiche 360', () => {
       user: {
         firstName: 'Ines', lastName: 'Andre', email: 'i@a.fr', phone: '06', avatarUrl: null,
         isSuperAdmin: false, birthDate: D('1992-09-04T00:00:00Z'), sex: 'FEMALE',
-        address: '12 rue des Sports', postalCode: '31000', city: 'Toulouse',
+        address: '12 rue des Sports', postalCode: '31000', city: 'Toulouse', pseudo: 'SmashMaster',
       },
     } as any);
     prismaMock.clubMember.findUnique.mockResolvedValue({ role: 'STAFF' } as any);
@@ -257,7 +257,7 @@ describe('getMemberHistory — enrichissements fiche 360', () => {
     expect(h.member).toMatchObject({
       membershipId: 'mb1', birthDate: '1992-09-04', sex: 'FEMALE',
       address: '12 rue des Sports', postalCode: '31000', city: 'Toulouse',
-      staffRole: 'STAFF', isCoach: false, isReferee: true, note: 'VIP',
+      staffRole: 'STAFF', isCoach: false, isReferee: true, note: 'VIP', pseudo: 'SmashMaster',
     });
   });
 
