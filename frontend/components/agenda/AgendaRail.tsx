@@ -16,17 +16,21 @@ const RAIL_CSS = `
 .ag-rail{display:grid;grid-auto-flow:column;gap:12px;align-items:stretch;grid-auto-columns:var(--ag-cols);grid-template-rows:var(--ag-rows);scroll-snap-type:x proximity;scroll-padding-left:20px}
 .ag-rail>*{scroll-snap-align:start}
 .ag-dots{display:flex;gap:6px;justify-content:center;padding-top:10px}
-@media (max-width:699.98px){.ag-rail{grid-auto-columns:calc(100% - 6px);grid-template-rows:auto;scroll-snap-type:x mandatory}.ag-arrows{display:none}}
+@media (max-width:699.98px){.ag-rail{grid-auto-columns:var(--ag-mobile-cols);grid-template-rows:auto;scroll-snap-type:x mandatory}.ag-arrows{display:none}}
 @media (min-width:700px){.ag-dots{display:none}}
 `;
 
-export function AgendaRail({ countLabel, desktopColumns = 'calc(50% - 6px)', desktopRows = 'auto', prevLabel, nextLabel, children }: {
+export function AgendaRail({ countLabel, desktopColumns = 'calc(50% - 6px)', desktopRows = 'auto', mobileColumns = 'calc(100% - 6px)', prevLabel, nextLabel, children }: {
   /** « 8 tournois » — rangée discrète alignée à droite au-dessus du rail. */
   countLabel?: string | null;
   /** grid-auto-columns ≥ 700px — '270px' (parties), 'calc((100% - 24px) / 3)' (clubs)… */
   desktopColumns?: string;
   /** 'auto' = 1 rangée si ≤ 4 enfants, sinon 2 (règle des étagères tournois/events). */
   desktopRows?: 1 | 2 | 'auto';
+  /** grid-auto-columns < 700px — défaut plein cadre (une carte + liseré ~14px). Les rails de
+   *  parties passent '272px' : cartes compactes conçues pour cette largeur (spec 2026-07-24
+   *  carte-partie-unifiée). */
+  mobileColumns?: string;
   prevLabel: string;
   nextLabel: string;
   children: ReactNode;
@@ -45,7 +49,7 @@ export function AgendaRail({ countLabel, desktopColumns = 'calc(50% - 6px)', des
       <div style={{ position: 'relative', margin: '0 -20px' }}>
         {/* scrollPaddingLeft (dans RAIL_CSS) = padding-left : sans lui le snap mandatory mange le padding au montage. */}
         <div ref={railRef} className="sp-scroll-x ag-rail" style={{
-          ...({ '--ag-cols': desktopColumns, '--ag-rows': `repeat(${rows}, auto)` } as React.CSSProperties),
+          ...({ '--ag-cols': desktopColumns, '--ag-rows': `repeat(${rows}, auto)`, '--ag-mobile-cols': mobileColumns } as React.CSSProperties),
           padding: '4px 20px 8px',
         }}>
           {children}

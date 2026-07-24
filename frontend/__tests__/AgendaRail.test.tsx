@@ -38,4 +38,14 @@ describe('AgendaRail', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Aller à la carte 2' }));
     expect(scrollTo).toHaveBeenCalled();
   });
+
+  it('mobileColumns personnalisé → variable CSS posée ; défaut = plein cadre', () => {
+    const { container, unmount } = wrap(<AgendaRail prevLabel="p" nextLabel="s" mobileColumns="272px">{cards(3)}</AgendaRail>);
+    expect((container.querySelector('.ag-rail') as HTMLElement).style.getPropertyValue('--ag-mobile-cols')).toBe('272px');
+    unmount();
+    const { container: c2 } = render(
+      <ThemeProvider><AgendaRail prevLabel="p" nextLabel="s">{cards(3)}</AgendaRail></ThemeProvider>,
+    );
+    expect((c2.querySelector('.ag-rail') as HTMLElement).style.getPropertyValue('--ag-mobile-cols')).toBe('calc(100% - 6px)');
+  });
 });
