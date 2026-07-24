@@ -6,7 +6,7 @@ import { useAuth } from '@/lib/useAuth';
 import { useTheme } from '@/lib/ThemeProvider';
 import { hardNavigate } from '@/lib/nav';
 import { platformUrl } from '@/lib/clubUrl';
-import { parseLocationQuery, DISCOVER_LOCATION_KEY } from '@/lib/discover';
+import { parseLocationQuery, DISCOVER_LOCATION_KEY, DISCOVER_MINE_ONLY_KEY } from '@/lib/discover';
 import { Screen } from '@/components/ui/Screen';
 import { Logotype, ThemeToggle, BackButton } from '@/components/ui/atoms';
 import { ProfileMenu } from '@/components/ProfileMenu';
@@ -123,6 +123,21 @@ export function DiscoverClient() {
     try { localStorage.setItem(DISCOVER_LOCATION_KEY, locInput); } catch { /* stockage indispo */ }
   }, [slug, locInput]);
 
+  // « Mes clubs » mémorisé d'une session à l'autre (comme la recherche par lieu et les filtres
+  // Tournois/Parties/Clubs) — ne s'applique, comme aujourd'hui, que si une adhésion active existe.
+  useEffect(() => {
+    if (slug) return;
+    try { if (localStorage.getItem(DISCOVER_MINE_ONLY_KEY) === '1') setMineOnly(true); }
+    catch { /* stockage indisponible */ }
+  }, [slug]);
+
+  const wroteMineOnlyOnce = useRef(false);
+  useEffect(() => {
+    if (slug) return;
+    if (!wroteMineOnlyOnce.current) { wroteMineOnlyOnce.current = true; return; }
+    try { localStorage.setItem(DISCOVER_MINE_ONLY_KEY, mineOnly ? '1' : '0'); } catch { /* stockage indisponible */ }
+  }, [slug, mineOnly]);
+
   useEffect(() => {
     if (slug) return;
     const io = new IntersectionObserver((entries) => {
@@ -231,9 +246,9 @@ export function DiscoverClient() {
           <div style={{ padding: '0 20px' }}>
             <div style={kickStyle}>{tick}Parties ouvertes</div>
             <h2 style={titleStyle}>Ça joue bientôt</h2>
-            <DiscoverMatches matches={filteredMatches} location={location} coords={coords} now={now}
-              onSeeClubs={() => jumpTo('clubs')} onCount={onCountParties} />
           </div>
+          <DiscoverMatches matches={filteredMatches} location={location} coords={coords} now={now}
+            onSeeClubs={() => jumpTo('clubs')} onCount={onCountParties} />
         </section>
 
         <section id="tournois" data-section="tournois" ref={(el) => { sectionRefs.current.tournois = el; }} style={{ paddingTop: 26 }}>
