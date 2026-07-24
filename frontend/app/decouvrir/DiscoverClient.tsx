@@ -242,8 +242,8 @@ export function DiscoverClient() {
           />
         </div>
 
-        <section id="parties" data-section="parties" ref={(el) => { sectionRefs.current.parties = el; }} style={{ paddingTop: 10 }}>
-          <div style={{ padding: '0 20px' }}>
+        <section id="parties" data-section="parties" ref={(el) => { sectionRefs.current.parties = el; }} style={{ paddingTop: 10, display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+          <div style={{ padding: '0 20px', flex: '1 1 auto', minWidth: 0 }}>
             <div style={kickStyle}>{tick}Parties ouvertes</div>
             <h2 style={titleStyle}>Ça joue bientôt</h2>
           </div>
@@ -251,8 +251,8 @@ export function DiscoverClient() {
             onSeeClubs={() => jumpTo('clubs')} onCount={onCountParties} />
         </section>
 
-        <section id="tournois" data-section="tournois" ref={(el) => { sectionRefs.current.tournois = el; }} style={{ paddingTop: 26 }}>
-          <div style={{ padding: '0 20px' }}>
+        <section id="tournois" data-section="tournois" ref={(el) => { sectionRefs.current.tournois = el; }} style={{ paddingTop: 26, display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+          <div style={{ padding: '0 20px', flex: '1 1 auto', minWidth: 0 }}>
             <div style={kickStyle}>{tick}Compétition</div>
             <h2 style={titleStyle}>Tournois</h2>
           </div>
@@ -260,8 +260,8 @@ export function DiscoverClient() {
             city={location.city ?? ''} deptCodes={location.deptCodes} onCount={onCountTournois} />
         </section>
 
-        <section id="clubs" data-section="clubs" ref={(el) => { sectionRefs.current.clubs = el; }} style={{ paddingTop: 26 }}>
-          <div style={{ padding: '0 20px' }}>
+        <section id="clubs" data-section="clubs" ref={(el) => { sectionRefs.current.clubs = el; }} style={{ paddingTop: 26, display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+          <div style={{ padding: '0 20px', flex: '1 1 auto', minWidth: 0 }}>
             <div style={kickStyle}>{tick}Annuaire</div>
             <h2 style={titleStyle}>Clubs</h2>
           </div>

@@ -133,7 +133,7 @@ export function ClubDirectory({ city: cityProp, coords: coordsProp, deptCodes, o
         <>
           <FiltersToggle count={clubsFilterCount} open={filtersOpen} onToggle={() => setFiltersOpen((o) => !o)} onClear={resetClubFilters} controlsId="clubs-facets" />
           {filtersOpen && (
-            <div id="clubs-facets" style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '4px 20px 0' }}>
+            <div id="clubs-facets" style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '4px 20px 0', width: '100%' }}>
               <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Nom du club" style={inputStyle} />
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
                 <button onClick={() => setSport('')} style={chipBtn(th, sport === '')}>Tous</button>
@@ -186,7 +186,7 @@ export function ClubDirectory({ city: cityProp, coords: coordsProp, deptCodes, o
           filtres), aucun plafond de résultats — tout résultat filtré reste atteignable via
           le défilement (les points de pagination du rail se masquent au-delà de 12 cartes).
           Mode contrôlé (/decouvrir) : cartes compactes 272px, comme les cartes de parties. */}
-      <div style={{ padding: controlled ? '8px 20px 0' : '20px 20px 0' }}>
+      <div style={{ padding: controlled ? '8px 20px 0' : '20px 20px 0', width: '100%' }}>
         {loading ? (
           <div style={{ padding: '30px 0', textAlign: 'center', fontFamily: th.fontUI, color: th.textFaint }}>Chargement…</div>
         ) : error ? (

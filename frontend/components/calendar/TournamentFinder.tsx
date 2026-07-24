@@ -210,45 +210,45 @@ export function TournamentFinder({
   const filterCount = activeFilterCount(state);
   const hasActiveFilters = filterCount > 0;
 
-  return (
-    // Le 100vh ne vaut que pour la page /tournois autonome — embarquée dans /decouvrir
-    // (hideTitle), la section reprend sa hauteur naturelle (fini l'écran vide sans tournoi).
-    <div style={{ paddingBottom: hideTitle ? 0 : 48, background: th.bg, minHeight: hideTitle ? undefined : '100vh' }}>
-      {!hideTitle && (
-        <div style={{ padding: '22px 20px 0' }}>
-          <div style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 30, color: th.text, letterSpacing: -0.5 }}>Calendrier des tournois</div>
-          <p style={{ fontFamily: th.fontUI, fontSize: 14, color: th.textMute, marginTop: 6 }}>Toutes les épreuves des clubs Palova, partout en France.</p>
+  // Bouton « Filtres » + tiroir de facettes — factorisé pour être référencé une seule fois
+  // dans les deux branches ci-dessous (embarqué /decouvrir vs page /tournois autonome), qui
+  // ne partagent pas le même conteneur racine (voir plus bas).
+  const filtersBlock = facets && (
+    <>
+      {/* Barre repliable : le panneau de facettes est fermé par défaut (le lieu vit dans la
+          pilule de /decouvrir). Un badge « Filtres · N » signale les filtres mémorisés,
+          sinon on ne comprend pas pourquoi la liste est réduite alors qu'aucun filtre n'est
+          visible ; « Effacer » vide sans avoir à déplier. */}
+      <FiltersToggle count={filterCount} open={filtersOpen} onToggle={() => setFiltersOpen((o) => !o)} onClear={clearFilters} controlsId="tournois-facets" />
+      {filtersOpen && (
+        <div id="tournois-facets" style={hideTitle ? { width: '100%' } : undefined}>
+          <FacetPanel
+            facets={facets}
+            state={state}
+            onToggleDept={(c) => toggleIn('deptCodes', c)}
+            onToggleCategory={(c) => toggleIn('categories', c)}
+            onToggleGender={(g) => toggleIn('genders', g)}
+            onSetPreset={(p) => setState((s) => ({ ...s, datePreset: p, from: null, to: null }))}
+            onSetRange={(from, to) => setState((s) => ({ ...s, from, to, datePreset: null }))}
+            onToggleNearMe={toggleNearMe}
+            onClear={clearFilters}
+            nearMeBusy={nearBusy}
+          />
         </div>
       )}
+    </>
+  );
 
-      {facets && (
-        <>
-          {/* Barre repliable : le panneau de facettes est fermé par défaut (le lieu vit dans la
-              pilule de /decouvrir). Un badge « Filtres · N » signale les filtres mémorisés,
-              sinon on ne comprend pas pourquoi la liste est réduite alors qu'aucun filtre n'est
-              visible ; « Effacer » vide sans avoir à déplier. */}
-          <FiltersToggle count={filterCount} open={filtersOpen} onToggle={() => setFiltersOpen((o) => !o)} onClear={clearFilters} controlsId="tournois-facets" />
-          {filtersOpen && (
-            <div id="tournois-facets">
-              <FacetPanel
-                facets={facets}
-                state={state}
-                onToggleDept={(c) => toggleIn('deptCodes', c)}
-                onToggleCategory={(c) => toggleIn('categories', c)}
-                onToggleGender={(g) => toggleIn('genders', g)}
-                onSetPreset={(p) => setState((s) => ({ ...s, datePreset: p, from: null, to: null }))}
-                onSetRange={(from, to) => setState((s) => ({ ...s, from, to, datePreset: null }))}
-                onToggleNearMe={toggleNearMe}
-                onClear={clearFilters}
-                nearMeBusy={nearBusy}
-              />
-            </div>
-          )}
-        </>
-      )}
-
-      {hideTitle ? (
-        <div style={{ padding: '8px 20px 0' }}>
+  // Embarqué (hideTitle, /decouvrir) : racine en Fragment — le bouton Filtres devient un
+  // sibling du bloc titre dans la <section> flex du parent (DiscoverClient), pour finir en
+  // bout de ligne du titre plutôt que sur sa propre rangée. Page /tournois autonome (jamais
+  // atteinte en pratique, /tournois redirige désormais vers /decouvrir) : garde son propre
+  // conteneur plein écran (fond + hauteur mini), title + filtres + résultats empilés dedans.
+  if (hideTitle) {
+    return (
+      <>
+        {filtersBlock}
+        <div style={{ padding: '8px 20px 0', width: '100%' }}>
           {visibleResults === null && <div style={{ fontFamily: th.fontUI, color: th.textFaint }}>Chargement…</div>}
           {visibleResults?.length === 0 && (
             <div style={{ textAlign: 'center', padding: '18px 0 6px' }}>
@@ -294,47 +294,61 @@ export function TournamentFinder({
             </AgendaRail>
           )}
         </div>
-      ) : (
-        <div style={{ padding: '18px 20px 0', display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {visibleResults === null && <div style={{ fontFamily: th.fontUI, color: th.textFaint }}>Chargement…</div>}
-          {visibleResults?.length === 0 && (
-            <div style={{ textAlign: 'center', padding: '18px 0 6px' }}>
-              <div style={{ fontFamily: th.fontUI, fontSize: 14, color: th.textMute }}>
-                {hasActiveFilters ? 'Aucun tournoi ne correspond à votre recherche.' : 'Aucun tournoi à venir pour le moment.'}
-              </div>
-              {hasActiveFilters && (
-                <button onClick={clearFilters} style={{
-                  marginTop: 12, border: 'none', cursor: 'pointer', borderRadius: 999, padding: '9px 18px',
-                  fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 700, background: th.accent, color: th.onAccent,
-                }}>
-                  Effacer les filtres
-                </button>
-              )}
+      </>
+    );
+  }
+
+  // Page /tournois autonome : conteneur plein écran (fond + hauteur mini), title + filtres +
+  // résultats empilés dedans (jamais atteinte en pratique — /tournois redirige vers
+  // /decouvrir — mais gardée fonctionnelle pour tout futur appelant hors /decouvrir).
+  return (
+    <div style={{ paddingBottom: 48, background: th.bg, minHeight: '100vh' }}>
+      <div style={{ padding: '22px 20px 0' }}>
+        <div style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 30, color: th.text, letterSpacing: -0.5 }}>Calendrier des tournois</div>
+        <p style={{ fontFamily: th.fontUI, fontSize: 14, color: th.textMute, marginTop: 6 }}>Toutes les épreuves des clubs Palova, partout en France.</p>
+      </div>
+
+      {filtersBlock}
+
+      <div style={{ padding: '18px 20px 0', display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {visibleResults === null && <div style={{ fontFamily: th.fontUI, color: th.textFaint }}>Chargement…</div>}
+        {visibleResults?.length === 0 && (
+          <div style={{ textAlign: 'center', padding: '18px 0 6px' }}>
+            <div style={{ fontFamily: th.fontUI, fontSize: 14, color: th.textMute }}>
+              {hasActiveFilters ? 'Aucun tournoi ne correspond à votre recherche.' : 'Aucun tournoi à venir pour le moment.'}
             </div>
-          )}
-          {visibleResults?.map(({ tournament: t, distanceKm }) => {
-            const subtitle = [t.club.name, t.club.city, distanceKm != null ? `${Math.round(distanceKm)} km` : null].filter(Boolean).join(' · ');
-            return (
-              <AgendaCard
-                key={t.id}
-                icon="trophy"
-                accent={ACCENTS.apricot}
-                tag={`${t.category} · ${GENDER_LABEL[t.gender]}`}
-                title={t.name}
-                subtitle={subtitle}
-                dateLabel={formatDateTimeRange(t.startTime, t.endTime, t.club.timezone)}
-                deadline={t.registrationDeadline}
-                now={now}
-                ratio={fillRatio(t)}
-                places={tournamentPlacesLabel(t)}
-                price={t.entryFee ? `${t.entryFee} €` : null}
-                sportLabel={showSport ? (t.sport?.name ?? null) : null}
-                onClick={() => { window.location.href = clubUrl(t.club.slug, `/tournois/${t.id}`); }}
-              />
-            );
-          })}
-        </div>
-      )}
+            {hasActiveFilters && (
+              <button onClick={clearFilters} style={{
+                marginTop: 12, border: 'none', cursor: 'pointer', borderRadius: 999, padding: '9px 18px',
+                fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 700, background: th.accent, color: th.onAccent,
+              }}>
+                Effacer les filtres
+              </button>
+            )}
+          </div>
+        )}
+        {visibleResults?.map(({ tournament: t, distanceKm }) => {
+          const subtitle = [t.club.name, t.club.city, distanceKm != null ? `${Math.round(distanceKm)} km` : null].filter(Boolean).join(' · ');
+          return (
+            <AgendaCard
+              key={t.id}
+              icon="trophy"
+              accent={ACCENTS.apricot}
+              tag={`${t.category} · ${GENDER_LABEL[t.gender]}`}
+              title={t.name}
+              subtitle={subtitle}
+              dateLabel={formatDateTimeRange(t.startTime, t.endTime, t.club.timezone)}
+              deadline={t.registrationDeadline}
+              now={now}
+              ratio={fillRatio(t)}
+              places={tournamentPlacesLabel(t)}
+              price={t.entryFee ? `${t.entryFee} €` : null}
+              sportLabel={showSport ? (t.sport?.name ?? null) : null}
+              onClick={() => { window.location.href = clubUrl(t.club.slug, `/tournois/${t.id}`); }}
+            />
+          );
+        })}
+      </div>
     </div>
   );
 }

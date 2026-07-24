@@ -6,6 +6,10 @@ import { Icon } from '@/components/ui/Icon';
 // (Tournois, Parties, Clubs) — extrait de TournamentFinder.tsx pour un seul langage. Badge
 // compteur, chevron, lien « Effacer » à côté (rendu seulement si count > 0). Le tiroir de
 // contenu (facettes) reste chez l'appelant — ce composant ne rend que la rangée de contrôle.
+// Placé en bout de ligne du titre de section (DiscoverClient rend le titre + ce composant
+// comme deux items d'une même rangée flex) : pas de padding gauche (le bloc titre ancre déjà
+// le bord gauche de la rangée), seul le bord droit (20px) reste, pour aligner avec le reste
+// de la page.
 export function FiltersToggle({ count, open, onToggle, onClear, controlsId }: {
   count: number;
   open: boolean;
@@ -15,7 +19,7 @@ export function FiltersToggle({ count, open, onToggle, onClear, controlsId }: {
 }) {
   const { th } = useTheme();
   return (
-    <div style={{ padding: '4px 20px 0', display: 'flex', alignItems: 'center', gap: 10 }}>
+    <div style={{ padding: '4px 20px 4px 0', display: 'flex', alignItems: 'center', gap: 10 }}>
       <button
         type="button"
         onClick={onToggle}

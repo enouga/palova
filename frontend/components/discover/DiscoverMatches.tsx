@@ -118,7 +118,7 @@ export function DiscoverMatches({
     <>
       <FiltersToggle count={filterCount} open={filtersOpen} onToggle={() => setFiltersOpen((o) => !o)} onClear={resetFilters} controlsId="parties-facets" />
       {filtersOpen && (
-        <div id="parties-facets" style={{ padding: '4px 20px 0' }}>
+        <div id="parties-facets" style={{ padding: '4px 20px 0', width: '100%' }}>
           <div style={{ borderRadius: 16, background: th.bgElev, boxShadow: `inset 0 0 0 1px ${th.line}` }}>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '14px 26px', padding: '12px 14px' }}>
               <FacetGroup label="Quand" tint={FILTER_TINTS.quand}>
@@ -149,7 +149,7 @@ export function DiscoverMatches({
         </div>
       )}
 
-      <div style={{ padding: '8px 20px 0' }}>
+      <div style={{ padding: '8px 20px 0', width: '100%' }}>
         {list.length === 0 ? (
           <div style={{ padding: '18px 0 6px', textAlign: 'center', fontFamily: th.fontUI, color: th.textMute }}>
             <div>Aucune partie ne correspond pour le moment.</div>
