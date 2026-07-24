@@ -105,8 +105,6 @@ describe('PalovaHome — connecté', () => {
   it('salue le joueur et empile ses blocs, sans la copie marketing', async () => {
     wrap();
     expect(await screen.findByText('Bonjour Eric')).toBeInTheDocument();
-    expect(screen.getByTestId('results-confirm')).toBeInTheDocument();
-    expect(screen.getByTestId('results-record')).toBeInTheDocument();
     expect(screen.getByTestId('agenda')).toBeInTheDocument();
     expect(screen.getByTestId('level')).toBeInTheDocument();
     expect(screen.getByTestId('wallet')).toBeInTheDocument();
@@ -122,6 +120,15 @@ describe('PalovaHome — connecté', () => {
   it('garde le MÊME moteur de découverte que le visiteur', async () => {
     wrap();
     expect(await screen.findByTestId('discover')).toBeInTheDocument();
+  });
+
+  // Les résultats de match ont quitté l'accueil : ils vivent sur le Club-house, /parties
+  // et /me/matches. L'accueil plateforme reste tourné vers « où jouer ».
+  it('ne porte PAS les résultats à confirmer / à saisir', async () => {
+    wrap();
+    await screen.findByTestId('discover');
+    expect(screen.queryByTestId('results-confirm')).toBeNull();
+    expect(screen.queryByTestId('results-record')).toBeNull();
   });
 
   it('passe ses clubs ACTIFS au filtre « Mes clubs » (les autres statuts sont ignorés)', async () => {

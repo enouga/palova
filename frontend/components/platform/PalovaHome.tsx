@@ -19,8 +19,6 @@ import { HomeAgenda } from '@/components/platform/home/HomeAgenda';
 import { WalletCard } from '@/components/platform/home/WalletCard';
 import { LevelCard } from '@/components/platform/home/LevelCard';
 import { ManagedClubsCard } from '@/components/platform/home/ManagedClubsCard';
-import { ResultsToRecord } from '@/components/match/ResultsToRecord';
-import { ResultsToConfirm } from '@/components/match/ResultsToConfirm';
 
 type Th = ReturnType<typeof useTheme>['th'];
 
@@ -28,8 +26,7 @@ type Th = ReturnType<typeof useTheme>['th'];
 // pour tout le monde le moteur de découverte complet (recherche par lieu + les trois sections
 // filtrables, `DiscoverSections`), et ajoute par-dessus ce qui est propre à l'état de session :
 //   visiteur → hero SEO (<h1>), « Comment ça marche », panneau B2B, outro de marque ;
-//   connecté → carte Gestion, hero « Bonjour X », résultats à confirmer/saisir, agenda,
-//              puis niveau + portefeuille en pied de page.
+//   connecté → carte Gestion, hero « Bonjour X », agenda, puis niveau + portefeuille en pied.
 // Remplace les trois surfaces d'avant (vitrine, « Mon Palova », /decouvrir), archivées telles
 // quelles sous `components/legacy/` et consultables sur `/archive/*`.
 //
@@ -99,10 +96,11 @@ export function PalovaHome() {
 
   // Contenu glissé entre la barre de recherche collante et la première section (cf. la prop
   // `intro` de DiscoverSections : la pilule chevauche le hero, rien ne peut s'intercaler avant).
+  // Les résultats de match (à confirmer / à saisir) ne vivent PAS ici : l'accueil plateforme
+  // reste tourné vers « où jouer ». Ils restent portés par le Club-house, /parties et
+  // /me/matches, où le joueur va justement gérer ses parties.
   const intro = token ? (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 26, padding: '14px 20px 4px' }}>
-      <ResultsToConfirm token={token} />
-      <ResultsToRecord token={token} />
+    <div style={{ padding: '14px 20px 4px' }}>
       <HomeAgenda items={upcoming} now={now} />
     </div>
   ) : (
