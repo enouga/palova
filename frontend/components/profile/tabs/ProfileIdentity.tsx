@@ -21,6 +21,14 @@ export function ProfileIdentity({ profile, set, sports, licence, clubName, onLic
 
   return (
     <>
+      {/* Pas d'aria-label sur cette section : il collisionnerait avec l'aria-label="Pseudo"
+          de l'input lui-même (getByLabelText matche aussi les aria-label génériques). */}
+      <section style={card}>
+        <CardKicker>Pseudo</CardKicker>
+        <ProfileInput label="Pseudo" value={profile.pseudo ?? ''} onChange={(v) => set('pseudo', v)} placeholder="SmashMaster" />
+        <span style={hint}>Affiché à la place de votre prénom/nom dans les parties ouvertes, quand il est renseigné.</span>
+      </section>
+
       {sports.length > 0 && (
         <section style={card} aria-label="Sport préféré">
           <CardKicker>Sport préféré</CardKicker>
