@@ -15,7 +15,7 @@ const MATCH_INCLUDE = {
   resource: { select: { id: true, name: true, attributes: true, clubId: true, clubSport: { select: { sport: { select: { key: true, name: true } } } } } },
   participants: {
     orderBy: { joinedAt: 'asc' },
-    select: { userId: true, isOrganizer: true, team: true, slot: true, user: { select: { firstName: true, lastName: true, avatarUrl: true } } },
+    select: { userId: true, isOrganizer: true, team: true, slot: true, user: { select: { firstName: true, lastName: true, avatarUrl: true, pseudo: true } } },
   },
   openMatchMessages: { where: { deletedAt: null }, orderBy: { createdAt: 'desc' }, take: 1, select: { createdAt: true } },
   _count: { select: { openMatchMessages: { where: { deletedAt: null } } } },
@@ -105,6 +105,7 @@ export class OpenMatchService {
     const spotsLeft = Math.max(0, maxPlayers - m.participants.length);
     const players = teamed.map((p) => ({
       userId: p.userId, firstName: p.user.firstName, lastName: p.user.lastName, avatarUrl: p.user.avatarUrl, isOrganizer: p.isOrganizer,
+      pseudo: p.user.pseudo,
       level: levels[`${p.userId}:${sportKey}`] ?? null,
       team: p.team,
       slot: p.slot,

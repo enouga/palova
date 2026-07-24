@@ -139,6 +139,25 @@ describe('OpenMatchService', () => {
       expect(match.gender).toBe('MIXED');
     });
 
+    it('expose le pseudo par joueur quand renseigné', async () => {
+      prismaMock.reservation.findMany.mockResolvedValue([
+        {
+          id: 'm1', startTime: future(48), endTime: future(49),
+          resource: { id: 'court-1', name: 'Court 1', attributes: { format: 'double' }, clubSport: { sport: { key: 'padel', name: 'Padel' } } },
+          participants: [
+            { userId: 'org', isOrganizer: true, team: null, user: { firstName: 'Org', lastName: 'A', avatarUrl: null, pseudo: 'SmashMaster' } },
+            { userId: 'viewer', isOrganizer: false, team: null, user: { firstName: 'V', lastName: 'B', avatarUrl: null, pseudo: null } },
+          ], openMatchMessages: [], _count: { openMatchMessages: 0 },
+        },
+      ] as any);
+
+      const [match] = await service.listOpenMatches('club-demo', 'viewer');
+
+      const byId = Object.fromEntries(match.players.map((p: any) => [p.userId, p]));
+      expect(byId.org.pseudo).toBe('SmashMaster');
+      expect(byId.viewer.pseudo).toBeNull();
+    });
+
     it('gender = null quand la résa n est pas genrée', async () => {
       prismaMock.reservation.findMany.mockResolvedValue([
         {
@@ -960,6 +979,14 @@ describe('OpenMatchService', () => {
       expect(out.viewerIsParticipant).toBe(false);
       expect(out.viewerIsOrganizer).toBe(false);
       expect(out.unreadCount).toBe(0);
+    });
+
+    it('expose aussi le pseudo (DTO partagé avec listOpenMatches)', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue(row({
+        participants: [{ userId: 'org', isOrganizer: true, team: null, user: { firstName: 'Org', lastName: 'A', avatarUrl: null, pseudo: 'SmashMaster' } }],
+      }) as any);
+      const out = await service.getOpenMatch('club-demo', 'm1', null);
+      expect(out.players[0].pseudo).toBe('SmashMaster');
     });
 
     it('autorise une partie déjà passée (lien partagé résout toujours)', async () => {
