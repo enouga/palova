@@ -10,10 +10,12 @@ const NAT: NationalTournament[] = [
     club: { slug: 'paris', name: 'Padel Paris', city: 'Paris', department: 'Paris', departmentCode: '75', timezone: 'Europe/Paris', accentColor: '#000', logoUrl: null, latitude: 48.85, longitude: 2.35 } },
 ];
 
-it("le lien « Voir tout le calendrier » pointe vers /decouvrir#tournois", () => {
+it("le lien « Voir tout le calendrier » pointe vers l'ancre tournois de l'accueil", () => {
   render(<ThemeProvider><UpcomingTournaments items={NAT} hideTitle /></ThemeProvider>);
   const link = screen.getByRole('link', { name: /Voir tout le calendrier/ });
-  expect(link.getAttribute('href')).toContain('/decouvrir#tournois');
+  // Le calendrier national vit désormais dans l'accueil plateforme, section « Prochains tournois ».
+  expect(link.getAttribute('href')).toContain('/#tournois');
+  expect(link.getAttribute('href')).not.toContain('/decouvrir');
 });
 
 it('rend une carte par tournoi et masque le titre interne (hideTitle)', () => {

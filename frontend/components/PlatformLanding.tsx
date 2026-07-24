@@ -2,20 +2,18 @@
 
 import { useAuth } from '@/lib/useAuth';
 import { useTheme } from '@/lib/ThemeProvider';
-import AnonymousView from '@/components/platform/AnonymousView';
-import { MonPalova } from '@/components/platform/MonPalova';
+import { PalovaHome } from '@/components/platform/PalovaHome';
 import { Screen } from '@/components/ui/Screen';
 import { Logotype, ThemeToggle } from '@/components/ui/atoms';
 
-// Accueil plateforme (palova.fr) — routeur de visages (spec Mon Palova 2026-07-22) :
-//  - visiteur → vitrine AnonymousView (surface SEO, inchangée)
-//  - connecté → Mon Palova (accueil personnel ; la carte Gestion y couvre les gérants,
-//    l'ancien ManagerView et la redirection /decouvrir ont disparu)
+// Accueil plateforme (palova.fr). Depuis la fusion des trois surfaces (vitrine anonyme,
+// « Mon Palova », /decouvrir), il n'y a plus de routeur de visages : UNE seule page,
+// `PalovaHome`, qui s'adapte elle-même à la session. On attend quand même `ready` pour ne
+// pas peindre la version visiteur une fraction de seconde à un joueur connecté.
 export default function PlatformLanding() {
-  const { token, ready } = useAuth();
+  const { ready } = useAuth();
   if (!ready) return <PlatformSkeleton />;
-  if (!token) return <AnonymousView />;
-  return <MonPalova />;
+  return <PalovaHome />;
 }
 
 function PlatformSkeleton() {

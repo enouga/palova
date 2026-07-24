@@ -15,7 +15,7 @@ describe('sitemap route', () => {
   it('hôte plateforme → pages statiques seules, pas de fetch club', async () => {
     (globalThis as any).__host = 'palova.fr';
     const entries = await sitemap();
-    expect(entries.map((e) => e.url)).toContain('https://palova.fr/decouvrir');
+    expect(entries.map((e) => e.url)).toContain('https://palova.fr/');
     expect(getClubTournaments).not.toHaveBeenCalled();
   });
 

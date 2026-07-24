@@ -49,7 +49,7 @@ jest.mock('@/lib/api', () => ({
 }));
 
 // Import après les mocks (le module lit `api`/`useClub`/`useAuth`/`hardNavigate` au montage).
-import { DiscoverClient } from '@/app/decouvrir/DiscoverClient';
+import { DiscoverClient } from '@/components/legacy/DiscoverClient';
 import type { NationalTournament, PlayerMembership } from '@/lib/api';
 
 function makeMatch(over: Partial<NationalOpenMatch> = {}): NationalOpenMatch {

@@ -43,6 +43,12 @@ describe('isPublicPath', () => {
     expect(isPublicPath('/decouvrir')).toBe(false);
   });
 
+  it('/archive/* est public : l’archive de l’accueil VISITEUR doit s’ouvrir sans session', () => {
+    expect(isPublicPath('/archive')).toBe(true);
+    expect(isPublicPath('/archive/accueil-visiteur')).toBe(true);
+    expect(isPlatformPublicPath('/archive/decouvrir')).toBe(true);
+  });
+
   it('/aide est public (page Aide joueur)', () => {
     expect(isPublicPath('/aide')).toBe(true);
     expect(isClubPublicPath('/aide')).toBe(true);

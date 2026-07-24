@@ -61,7 +61,7 @@ export function UpcomingTournaments({ items: preloaded, hideTitle }: { items?: N
             />
           ))}
         </AgendaRail>
-        <a href={platformUrl('/decouvrir#tournois')} style={{ display: 'inline-block', marginTop: 10, fontFamily: th.fontUI, fontWeight: 700, fontSize: 14.5, color: th.text, textDecoration: 'none' }}>
+        <a href={platformUrl('/#tournois')} style={{ display: 'inline-block', marginTop: 10, fontFamily: th.fontUI, fontWeight: 700, fontSize: 14.5, color: th.text, textDecoration: 'none' }}>
           Voir tout le calendrier →
         </a>
       </div>

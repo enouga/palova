@@ -3,11 +3,12 @@ import { useTheme } from '@/lib/ThemeProvider';
 import { HERO_GRADIENT, HERO_INK, HERO_INK_MUTED } from '@/components/agenda/AgendaHero';
 import { Icon } from '@/components/ui/Icon';
 
-// Hero « accueil » de Mon Palova — brume bleue (jamais de panneau sombre) : salutation +
+// Hero « accueil » du joueur connecté — brume bleue (jamais de panneau sombre) : salutation +
 // en-tête du tableau de bord. Il ne rejoue PLUS la prochaine réservation (elle vit dans
-// « À venir ») et ne porte plus la promesse de recherche : celle-ci vit dans la porte
-// Où jouer (DiscoverPill), rendue en frère JUSTE après ce hero (cf. MonPalova) et qui
-// flotte sur son bord bas via sa marge négative propre — d'où le padding bas généreux.
+// « À venir ») et ne porte pas la promesse de recherche : la pilule de recherche
+// (LocationSearchPill, cf. DiscoverSections) est rendue JUSTE après ce hero et flotte sur son
+// bord bas via sa marge négative propre — d'où le padding bas généreux.
+// (Toujours utilisé aussi par l'archive `components/legacy/MonPalova`, avec DiscoverPill.)
 export function HomeHero({ firstName }: { firstName: string | null }) {
   const { th } = useTheme();
   return (

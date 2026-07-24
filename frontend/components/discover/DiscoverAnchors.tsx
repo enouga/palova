@@ -3,9 +3,10 @@ import { useTheme } from '@/lib/ThemeProvider';
 
 export interface DiscoverAnchorItem { id: string; label: string; count: number | null }
 
-// Rangée d'ancres de /decouvrir : navigation dans le scroll (PAS des onglets — les sections
-// restent toutes rendues). Le parent fournit la section active (scroll-spy) ET la collante
-// (DiscoverClient l'empile avec la barre de recherche dans un seul conteneur sticky).
+// Rangée d'ancres des trois sections de découverte de l'accueil : navigation dans le scroll
+// (PAS des onglets — les sections restent toutes rendues). Le parent fournit la section active
+// (scroll-spy) ET la collante (DiscoverSections l'empile avec la barre de recherche dans un
+// seul conteneur sticky).
 export function DiscoverAnchors({ items, active, onJump }: {
   items: DiscoverAnchorItem[];
   active: string;

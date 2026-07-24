@@ -29,12 +29,17 @@ describe('buildRobots — hôte plateforme', () => {
   const r = () => rule(buildRobots(null, 'palova.fr'));
 
   it('autorise les pages légales (copie canonique unique) et le FAQ', () => {
-    expect(r().allow).toEqual(expect.arrayContaining(['/', '/decouvrir', '/tarifs', '/offres', '/faq', '/cgu', '/cgv', '/mentions-legales', '/confidentialite']));
+    expect(r().allow).toEqual(expect.arrayContaining(['/', '/tarifs', '/offres', '/faq', '/cgu', '/cgv', '/mentions-legales', '/confidentialite']));
     expect(r().disallow).not.toContain('/faq');
   });
 
   it('bloque /aide (pure redirection vers /faq ici) et les pages privées', () => {
     expect(r().disallow).toEqual(expect.arrayContaining(['/aide', '/login', '/forgot-password', '/clubs', '/me', '/admin', '/superadmin', '/session-bridge']));
+  });
+
+  it('bloque /decouvrir (fusionnée dans l’accueil) et /archive (copies figées) — jamais de doublon indexé', () => {
+    expect(r().allow).not.toContain('/decouvrir');
+    expect(r().disallow).toEqual(expect.arrayContaining(['/decouvrir', '/archive']));
   });
 });
 

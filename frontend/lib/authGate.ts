@@ -1,10 +1,13 @@
 // Chemins accessibles sans être connecté (portes d'entrée de l'app + pages de
 // contenu public : légales, FAQ, offres/tarifs — lisibles par tout visiteur).
+// `/archive` = copies figées des accueils d'avant la fusion (jamais indexées, hors
+// navigation) : l'archive de l'accueil VISITEUR doit s'ouvrir sans session, sinon elle
+// ne montrerait jamais ce qu'elle est censée montrer.
 export const PUBLIC_PATHS = [
   '/login', '/register', '/clubs/new', '/forgot-password',
   '/parties', '/club', '/session-bridge',
   '/faq', '/cgu', '/cgv', '/mentions-legales', '/confidentialite', '/offres', '/tarifs',
-  '/aide',
+  '/aide', '/archive',
 ];
 
 /** true si le chemin est public (exact ou sous-chemin d'un PUBLIC_PATHS). */

@@ -10,15 +10,14 @@ import { Chip, CardStripe } from '@/components/ui/atoms';
 import { SectionHeader } from '@/components/platform/home/SectionHeader';
 
 // Couleur SIGNATURE de « Gestion » (liseré/tuile/CTA/lavis) : apricot pastel FIXE, pas la
-// marque du club — la marque de chaque club géré reste lisible plus bas dans « Mes clubs ».
-// Un accent fixe évite deux écueils vécus en itération : (1) se fondre avec le bleu pâle du
+// marque du club. Un accent fixe évite deux écueils vécus en itération : (1) se fondre avec le bleu pâle du
 // hero juste en dessous quand la marque du club est elle-même bleue, (2) un lavis qui change
 // de teinte d'un club à l'autre pour un même bloc « accès admin ».
 const GESTION_ACCENT = ACCENTS.apricot;
 
 // Carte Gestion : une carte PAR club géré, teintée apricot pastel léger (liseré latéral +
 // lavis dégradé, langage des cartes d'offres admin) — se distingue nettement d'une ligne de
-// liste plate (MyClubsRow, HomeAgenda…), cohérent avec le statut d'accès privilégié que porte
+// liste plate (HomeAgenda…), cohérent avec le statut d'accès privilégié que porte
 // ce bloc. CTA « Gérer → » plein remplace le simple chevron. Absente pour le joueur pur.
 export function ManagedClubsCard({ token }: { token: string }) {
   const { th } = useTheme();
