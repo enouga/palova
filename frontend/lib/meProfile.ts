@@ -21,6 +21,7 @@ export function parseProfileTab(search: string): ProfileTabKey {
 /** Corps du PATCH /api/me. Assignable au paramètre de `api.updateMyProfile` (champs optionnels). */
 export interface UpdateProfileBody {
   phone: string | null;
+  pseudo: string | null;
   sex: Sex | null;
   birthDate: string | null;
   preferredSportId: string | null;
@@ -49,6 +50,7 @@ export interface UpdateProfileBody {
 export function buildProfileBody(p: MyProfile): UpdateProfileBody {
   return {
     phone: p.phone?.trim() || null,
+    pseudo: p.pseudo?.trim() || null,
     sex: p.sex,
     birthDate: p.birthDate ? p.birthDate.slice(0, 10) : null,
     preferredSportId: p.preferredSport?.id ?? null,
