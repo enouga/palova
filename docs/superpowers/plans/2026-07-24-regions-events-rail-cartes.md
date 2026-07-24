@@ -523,7 +523,7 @@ export function AgendaCard({ onClick, ...header }: AgendaCardProps) {
       border: 'none', cursor: 'pointer', textAlign: 'left', width: '100%',
       position: 'relative', overflow: 'hidden',
       ...cardStyle(th), padding: '13px 16px 13px 19px',
-      display: 'flex', alignItems: 'flex-start', gap: 13,
+      display: 'flex', alignItems: 'stretch', gap: 13,
     }}>
       <CardStripe color={header.accent} />
       <AgendaCardHeader {...header} />
