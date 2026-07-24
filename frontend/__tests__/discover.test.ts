@@ -1,4 +1,8 @@
-import { filterNationalMatches, parseLocationQuery, sortMatchesByDistance, distanceLabel } from '@/lib/discover';
+import {
+  filterNationalMatches, parseLocationQuery, sortMatchesByDistance, distanceLabel,
+  partiesStateToStored, storedToPartiesState, partiesFilterCount,
+  clubsStateToStored, storedToClubsFilters,
+} from '@/lib/discover';
 import type { DiscoverMatchFilter } from '@/lib/discover';
 import type { NationalOpenMatch, NationalOpenMatchClub } from '@/lib/api';
 
@@ -251,5 +255,62 @@ describe('parseLocationQuery — ville, code postal ou département', () => {
   });
   it('texte → recherche par nom (ville ou département)', () => {
     expect(parseLocationQuery('Colomiers')).toEqual({ city: 'Colomiers', deptCodes: [] });
+  });
+});
+
+describe('partiesStateToStored / storedToPartiesState', () => {
+  it('aller-retour préserve toutes les dimensions', () => {
+    const stored = partiesStateToStored({ datePreset: 'today', dateFrom: null, dateTo: null, kind: 'friendly', gender: 'WOMEN', levelOn: true });
+    expect(stored).toEqual({ quand: 'today', from: null, to: null, type: 'friendly', genre: 'WOMEN', niveau: true });
+    expect(storedToPartiesState(stored)).toEqual(stored);
+  });
+
+  it('entrée corrompue → état par défaut tolérant', () => {
+    const empty = { quand: null, from: null, to: null, type: 'all', genre: 'all', niveau: false };
+    expect(storedToPartiesState(null)).toEqual(empty);
+    expect(storedToPartiesState('not an object')).toEqual(empty);
+    expect(storedToPartiesState({ quand: 'bogus', type: 'bogus', genre: 'bogus', niveau: 'yes' })).toEqual(empty);
+  });
+
+  it('valide une plage from/to en string', () => {
+    expect(storedToPartiesState({ from: '2026-07-24', to: '2026-08-02' }))
+      .toEqual({ quand: null, from: '2026-07-24', to: '2026-08-02', type: 'all', genre: 'all', niveau: false });
+  });
+});
+
+describe('partiesFilterCount', () => {
+  const base = { datePreset: null, dateFrom: null, dateTo: null, kind: 'all' as const, gender: 'all' as const, levelOn: false, levelChipVisible: false };
+
+  it('aucun filtre actif → 0', () => {
+    expect(partiesFilterCount(base)).toBe(0);
+  });
+
+  it('date + type + genre actifs → 3', () => {
+    expect(partiesFilterCount({ ...base, datePreset: 'today', kind: 'friendly', gender: 'WOMEN' })).toBe(3);
+  });
+
+  it('plage from/to sans preset compte pour 1 (pas 2)', () => {
+    expect(partiesFilterCount({ ...base, dateFrom: '2026-07-24', dateTo: '2026-08-02' })).toBe(1);
+  });
+
+  it('niveau ON mais chip invisible → non compté', () => {
+    expect(partiesFilterCount({ ...base, levelOn: true, levelChipVisible: false })).toBe(0);
+  });
+
+  it('niveau ON et chip visible → compté', () => {
+    expect(partiesFilterCount({ ...base, levelOn: true, levelChipVisible: true })).toBe(1);
+  });
+});
+
+describe('clubsStateToStored / storedToClubsFilters', () => {
+  it('aller-retour préserve q et sport', () => {
+    const stored = clubsStateToStored({ q: 'Padel', sport: 'padel' });
+    expect(stored).toEqual({ q: 'Padel', sport: 'padel' });
+    expect(storedToClubsFilters(stored)).toEqual(stored);
+  });
+
+  it('entrée corrompue → état par défaut tolérant', () => {
+    expect(storedToClubsFilters(null)).toEqual({ q: '', sport: '' });
+    expect(storedToClubsFilters({ q: 42, sport: null })).toEqual({ q: '', sport: '' });
   });
 });

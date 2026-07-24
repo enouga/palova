@@ -1,5 +1,5 @@
 import type { NationalOpenMatch } from '@/lib/api';
-import { distanceKm, DatePreset, resolveDateWindow } from '@/lib/tournamentCalendar';
+import { distanceKm, DatePreset, resolveDateWindow, DATE_PRESET_KEYS } from '@/lib/tournamentCalendar';
 import { norm } from '@/lib/members';
 import { rangesOverlap } from '@/lib/levelMatch';
 
@@ -9,12 +9,17 @@ import { rangesOverlap } from '@/lib/levelMatch';
 // « Aujourd'hui / Cette semaine / Ce mois-ci / Dates » que la section Tournois, pas une
 // logique de fenêtre dupliquée.
 
+/** Type de partie : Pour de vrai / Pour le fun (miroir de OpenMatches.tsx). */
+export type PartiesKind = 'all' | 'competitive' | 'friendly';
+/** Genre de partie : Féminine / Mixte. */
+export type PartiesGender = 'all' | 'WOMEN' | 'MIXED';
+
 export interface DiscoverMatchFilter {
   datePreset: DatePreset | null;
   dateFrom: string | null; // 'YYYY-MM-DD'
   dateTo: string | null;   // 'YYYY-MM-DD'
-  kind: 'all' | 'competitive' | 'friendly';   // Pour de vrai / Pour le fun
-  gender: 'all' | 'WOMEN' | 'MIXED';          // Féminine / Mixte
+  kind: PartiesKind;
+  gender: PartiesGender;
   location: LocationQuery;
   myLevel: number | null;
 }
@@ -130,3 +135,84 @@ export function distanceLabel(km: number): string {
   if (km < 1) return `${Math.round(km * 1000)} m`;
   return `${Math.round(km)} km`;
 }
+
+// ── Filtres « Ça joue bientôt » : mémoire de session + badge compteur ─────────
+
+/** Clé localStorage des filtres Parties de /decouvrir (mémoire d'une session à l'autre). */
+export const DISCOVER_PARTIES_FILTERS_KEY = 'palova:discover-parties-filters';
+
+/** Forme JSON-sérialisable des filtres Parties. */
+export interface StoredPartiesFilters {
+  quand: DatePreset | null;
+  from: string | null;
+  to: string | null;
+  type: PartiesKind;
+  genre: PartiesGender;
+  niveau: boolean;
+}
+
+export function partiesStateToStored(s: {
+  datePreset: DatePreset | null; dateFrom: string | null; dateTo: string | null;
+  kind: PartiesKind; gender: PartiesGender; levelOn: boolean;
+}): StoredPartiesFilters {
+  return { quand: s.datePreset, from: s.dateFrom, to: s.dateTo, type: s.kind, genre: s.gender, niveau: s.levelOn };
+}
+
+const PARTIES_KIND_VALUES: PartiesKind[] = ['all', 'competitive', 'friendly'];
+const PARTIES_GENDER_VALUES: PartiesGender[] = ['all', 'WOMEN', 'MIXED'];
+
+/** Réhydrate un état depuis le stockage — tolérant à toute entrée corrompue (miroir de
+ *  `storedToCalendarState` de tournamentCalendar.ts). */
+export function storedToPartiesState(raw: unknown): StoredPartiesFilters {
+  const s: StoredPartiesFilters = { quand: null, from: null, to: null, type: 'all', genre: 'all', niveau: false };
+  if (!raw || typeof raw !== 'object') return s;
+  const o = raw as Record<string, unknown>;
+  if (typeof o.quand === 'string' && (DATE_PRESET_KEYS as string[]).includes(o.quand)) s.quand = o.quand as DatePreset;
+  if (typeof o.from === 'string') s.from = o.from;
+  if (typeof o.to === 'string') s.to = o.to;
+  if (typeof o.type === 'string' && (PARTIES_KIND_VALUES as string[]).includes(o.type)) s.type = o.type as PartiesKind;
+  if (typeof o.genre === 'string' && (PARTIES_GENDER_VALUES as string[]).includes(o.genre)) s.genre = o.genre as PartiesGender;
+  if (typeof o.niveau === 'boolean') s.niveau = o.niveau;
+  return s;
+}
+
+/** Nombre de dimensions de filtre ACTIVES (badge « Filtres · N »). Le terme niveau ne compte
+ *  que si la chip est visible (connecté + niveau calculé) — un `levelOn` restauré sans chip
+ *  visible ne doit pas gonfler le badge d'un filtre invisible. Une plage from/to compte pour
+ *  1, pas 2 (même règle que `activeFilterCount` de tournamentCalendar.ts). */
+export function partiesFilterCount(f: {
+  datePreset: DatePreset | null; dateFrom: string | null; dateTo: string | null;
+  kind: PartiesKind; gender: PartiesGender; levelOn: boolean; levelChipVisible: boolean;
+}): number {
+  return (f.datePreset || f.dateFrom || f.dateTo ? 1 : 0)
+    + (f.kind !== 'all' ? 1 : 0)
+    + (f.gender !== 'all' ? 1 : 0)
+    + (f.levelChipVisible && f.levelOn ? 1 : 0);
+}
+
+// ── Filtres Clubs (mode contrôlé de /decouvrir seulement) ─────────────────────
+
+/** Clé localStorage des filtres Clubs de /decouvrir — mode contrôlé seulement, la vitrine
+ *  anonyme (`ClubDirectory` en mode autonome) ne mémorise rien. */
+export const DISCOVER_CLUBS_FILTERS_KEY = 'palova:discover-clubs-filters';
+
+export interface StoredClubsFilters { q: string; sport: string }
+
+export function clubsStateToStored(s: { q: string; sport: string }): StoredClubsFilters {
+  return { q: s.q, sport: s.sport };
+}
+
+/** Réhydrate un état depuis le stockage — tolérant à toute entrée corrompue. */
+export function storedToClubsFilters(raw: unknown): StoredClubsFilters {
+  const s: StoredClubsFilters = { q: '', sport: '' };
+  if (!raw || typeof raw !== 'object') return s;
+  const o = raw as Record<string, unknown>;
+  if (typeof o.q === 'string') s.q = o.q;
+  if (typeof o.sport === 'string') s.sport = o.sport;
+  return s;
+}
+
+// ── Filtre « Mes clubs » (mémorisé d'une session à l'autre) ───────────────────
+
+/** Clé localStorage du toggle « Mes clubs » de /decouvrir. */
+export const DISCOVER_MINE_ONLY_KEY = 'palova:discover-mine-only';
