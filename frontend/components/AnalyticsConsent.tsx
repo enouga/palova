@@ -51,7 +51,9 @@ export function AnalyticsConsent() {
     <div
       role="status"
       aria-label="Consentement aux cookies"
-      style={{ position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 60, background: th.surface2, borderTop: `1px solid ${th.line}`, padding: '14px 16px', boxShadow: th.shadow, fontFamily: th.fontUI }}
+      // zIndex bas exprès : rester sous tous les modaux/feuilles de l'appli (z-50 et plus), sinon
+      // la bannière recouvre leurs boutons du bas (ex. le pavé de saisie de score, z-50).
+      style={{ position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 35, background: th.surface2, borderTop: `1px solid ${th.line}`, padding: '14px 16px', boxShadow: th.shadow, fontFamily: th.fontUI }}
     >
       <div style={{ maxWidth: 900, margin: '0 auto', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12, justifyContent: 'space-between' }}>
         <p style={{ margin: 0, color: th.text, fontSize: 14, lineHeight: 1.4, flex: '1 1 320px' }}>

@@ -133,6 +133,13 @@ describe('ReservationService', () => {
       expect(mockBroadcastClub).toHaveBeenCalledWith('club-demo', expect.objectContaining({ type: 'slot_held', resourceId: 'court-1' }));
     });
 
+    it('lève RATE_LIMITED au-delà de 20 holds/min pour le même joueur, sans tenter le lock', async () => {
+      redisMock.incr.mockResolvedValue(21);
+
+      await expect(service.holdSlot(baseParams)).rejects.toThrow('RATE_LIMITED');
+      expect(redisMock.set).not.toHaveBeenCalled();
+    });
+
     it('lève SLOT_ALREADY_HELD si Redis NX retourne null', async () => {
       redisMock.set.mockResolvedValue(null);
 

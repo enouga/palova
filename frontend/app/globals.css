@@ -296,3 +296,15 @@ button:not([disabled]):active { transform: translateY(0) scale(.97); filter: bri
 /* Rangée des « portes » du détail (Activité / Finances / Niveau / Fidélité). */
 .mb-doors { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
 @media (min-width: 900px) { .mb-doors { grid-template-columns: repeat(4, 1fr); } }
+
+/* ── Lignes « Résultats à confirmer » / « Résultat à saisir » : empilées sur
+   mobile (nom+méta pleine largeur, boutons en dessous), boutons réalignés sur
+   la même ligne que le nom dès 620px (bascule 100% CSS, pas de useIsDesktop
+   → aucun flash). ── */
+.results-row { display: flex; flex-direction: column; }
+.results-row .results-actions { margin-top: 8px; }
+@media (min-width: 620px) {
+  .results-row { flex-direction: row; align-items: center; gap: 12px; }
+  .results-row .results-head { flex: 1; min-width: 0; }
+  .results-row .results-actions { margin-top: 0; flex-shrink: 0; }
+}

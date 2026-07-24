@@ -144,14 +144,14 @@ export function DiscoverMatches({
         </div>
       ) : (
         <div>
-          {/* Étagère : cartes à largeur fixe (270px). UNE seule ligne jusqu'à 4 vignettes,
-              2 rangées seulement au-delà (grid-auto-flow: column remplit colonne par colonne).
-              align-items: stretch + CTA en bas (NationalMatchCard) → hauteurs égales par rangée,
-              les boutons s'alignent même si une carte est plus haute. */}
+          {/* Étagère : cartes à largeur fixe (270px), TOUJOURS sur une seule ligne qui défile
+              horizontalement (grid-auto-flow: column). align-items: stretch + CTA en bas
+              (NationalMatchCard) → hauteurs égales, les boutons s'alignent même si une carte
+              est plus haute. */}
           <div style={{ textAlign: 'right', fontFamily: th.fontUI, fontSize: 13, fontWeight: 700, color: th.text, marginBottom: 4 }}>{count}</div>
           <div style={{ position: 'relative', margin: '0 -20px' }}>
             <div ref={railRef} className="sp-scroll-x" style={{
-              display: 'grid', gridTemplateRows: `repeat(${list.length <= 4 ? 1 : 2}, auto)`,
+              display: 'grid', gridTemplateRows: 'auto',
               gridAutoFlow: 'column', gridAutoColumns: '270px', gap: 14, alignItems: 'stretch',
               padding: '4px 20px 8px', scrollSnapType: 'x proximity', scrollPaddingLeft: 20,
             }}>

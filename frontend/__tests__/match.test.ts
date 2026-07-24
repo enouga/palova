@@ -1,4 +1,4 @@
-import { scoreLine, canRecordResult, validSets, winnerFromSets, splitTeams } from '@/lib/match';
+import { scoreLine, canRecordResult, validSets, winnerFromSets, splitTeams, teamFirstNamesLabel } from '@/lib/match';
 
 describe('scoreLine', () => {
   it('formate les sets', () => expect(scoreLine([[6, 4], [3, 6], [7, 5]])).toBe('6-4 / 3-6 / 7-5'));
@@ -44,5 +44,28 @@ describe('splitTeams', () => {
     const { partners, opponents } = splitTeams([players[0], players[2]], 2);
     expect(partners).toEqual([]);
     expect(opponents.map((p) => p.userId)).toEqual(['u3']);
+  });
+});
+
+describe('teamFirstNamesLabel', () => {
+  it('joint les prénoms', () => {
+    const all = [
+      { firstName: 'Jean', lastName: 'Dupont' },
+      { firstName: 'Adrien', lastName: 'Abonne' },
+      { firstName: 'Karim', lastName: 'Benali' },
+      { firstName: 'Lucas', lastName: 'Moreau' },
+    ];
+    expect(teamFirstNamesLabel([all[0], all[1]], all)).toBe('Jean & Adrien');
+  });
+
+  it('désambiguïse un prénom en double par l\'initiale du nom', () => {
+    const all = [
+      { firstName: 'Jean', lastName: 'Dupont' },
+      { firstName: 'Jean', lastName: 'Moreau' },
+      { firstName: 'Karim', lastName: 'Benali' },
+      { firstName: 'Lea', lastName: 'Martin' },
+    ];
+    expect(teamFirstNamesLabel([all[0], all[2]], all)).toBe('Jean D. & Karim');
+    expect(teamFirstNamesLabel([all[1], all[3]], all)).toBe('Jean M. & Lea');
   });
 });

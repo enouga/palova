@@ -245,7 +245,8 @@ export function TournamentFinder({
                   (mobile compris), la 3e colonne démarre juste après et se révèle au
                   défilement (même traitement que Prochains events / Clubs). */}
               {/* UNE ligne jusqu'à 4 tournois, 2 rangées au-delà (gridTemplateRows inline, dynamique). */}
-              <style>{`.discover-tournaments-grid{display:grid;grid-auto-flow:column;grid-auto-columns:calc(50% - 6px);gap:12px;align-items:start}`}</style>
+              <style>{`.discover-tournaments-grid{display:grid;grid-auto-flow:column;grid-auto-columns:calc(50% - 6px);gap:12px;align-items:start}
+              @media (max-width: 700px) { .discover-tournaments-grid{grid-template-rows:auto !important;grid-auto-columns:86%} }`}</style>
               <div style={{ textAlign: 'right', fontFamily: th.fontUI, fontSize: 13, fontWeight: 700, color: th.text, marginBottom: 4 }}>
                 {visibleResults.length} tournoi{visibleResults.length > 1 ? 's' : ''}
               </div>
