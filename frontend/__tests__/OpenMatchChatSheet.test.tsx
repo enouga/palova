@@ -146,3 +146,13 @@ it('RATE_LIMITED à l envoi affiche un message inline', async () => {
   fireEvent.click(screen.getByRole('button', { name: /envoyer/i }));
   expect(await screen.findByText(/trop de messages/i)).toBeInTheDocument();
 });
+
+it('affiche le pseudo de l’auteur dans l’en-tête du message quand renseigné', async () => {
+  const { api } = require('@/lib/api');
+  api.getChatMessages.mockResolvedValueOnce([
+    { id: 'm1', author: { userId: 'u2', firstName: 'Bob', lastName: 'Y', avatarUrl: null, pseudo: 'SmashMaster' }, body: 'salut', createdAt: '2026-06-28T10:00:00Z', deleted: false },
+  ]);
+  renderSheet();
+  expect(await screen.findByText(/SmashMaster ·/)).toBeInTheDocument();
+  expect(screen.queryByText(/^Bob ·/)).not.toBeInTheDocument();
+});

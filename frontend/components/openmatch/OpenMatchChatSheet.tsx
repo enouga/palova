@@ -136,7 +136,7 @@ export function OpenMatchChatSheet({ slug, token, reservationId, viewerUserId, v
                 <Avatar firstName={m.author.firstName} lastName={m.author.lastName} avatarUrl={m.author.avatarUrl} size={28} color={colorForSeed(m.author.userId)} />
                 <div style={{ maxWidth: '72%' }}>
                   <div style={{ fontFamily: th.fontUI, fontSize: 11.5, color: th.textFaint, marginBottom: 2, textAlign: mine ? 'right' : 'left' }}>
-                    {m.author.firstName} · {hhmm(m.createdAt, timezone)}{m.edited ? ' · modifié' : ''}
+                    {m.author.pseudo ?? m.author.firstName} · {hhmm(m.createdAt, timezone)}{m.edited ? ' · modifié' : ''}
                   </div>
                   {editingId === m.id ? (
                     <div>
