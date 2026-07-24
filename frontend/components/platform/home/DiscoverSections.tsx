@@ -14,6 +14,11 @@ import { LocationSearchPill, PILL_INK } from '@/components/discover/LocationSear
 const SECTION_IDS = ['parties', 'tournois', 'clubs'] as const;
 type SectionId = (typeof SECTION_IDS)[number];
 
+/** Hauteur dont la pilule de recherche mord sur le bord bas du hero. Doit rester égale à la
+ * marge négative de `LocationSearchPill` : cette marge remonte la barre collante d'autant
+ * (fusion de marges), donc le hero se termine exactement à `STICKY_OVERLAP` sous le haut de la barre. */
+const STICKY_OVERLAP = 29;
+
 // Moteur de découverte de l'accueil : barre de localisation unique (ville / code postal /
 // département + géoloc) qui filtre TOUT, rangée d'ancres collante (navigation dans le scroll,
 // pas des onglets — les trois sections restent rendues), puis les trois sections filtrables.
@@ -53,6 +58,24 @@ export function DiscoverSections({ matches, tournaments, now, myClubSlugs, intro
   // Scroll-spy : section active = la plus visible (IntersectionObserver, stubé en jsdom).
   const [active, setActive] = useState<SectionId>('parties');
   const sectionRefs = useRef<Record<SectionId, HTMLElement | null>>({ parties: null, tournois: null, clubs: null });
+
+  // Barre collée au haut de la fenêtre ? Une sentinelle de 1px posée au bord bas du hero le dit :
+  // tant qu'elle est visible, le fond opaque de la barre démarre SOUS la bande de chevauchement
+  // (le hero garde ses coins bas arrondis et la pilule flotte dessus) ; dès qu'elle sort par le
+  // haut, le fond couvre toute la barre — sans quoi le contenu défilerait dans cette bande.
+  // (IntersectionObserver stubé en jsdom : `stuck` reste false, soit l'état au repos.)
+  const [stuck, setStuck] = useState(false);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el) return;
+    const io = new IntersectionObserver((entries) => {
+      const e = entries[entries.length - 1];
+      if (e) setStuck(!e.isIntersecting);
+    });
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
 
   const myClubsChipVisible = (myClubSlugs?.size ?? 0) > 0;
   const myClubsActive = myClubsChipVisible && mineOnly;
@@ -140,9 +163,21 @@ export function DiscoverSections({ matches, tournaments, now, myClubSlugs, intro
 
   return (
     <>
+      {/* Sentinelle d'épinglage — au bord bas du hero, sous la bande de chevauchement. */}
+      <div ref={sentinelRef} aria-hidden style={{ height: 1 }} />
+
       {/* Recherche par lieu + ancres : collantes ENSEMBLE (un seul conteneur sticky) pour
           garder le filtre lieu actionnable en scrollant les listes, sans dupliquer la pilule. */}
-      <div style={{ position: 'sticky', top: 0, zIndex: 30, background: th.bg }}>
+      <div style={{ position: 'sticky', top: 0, zIndex: 30 }}>
+        {/* Le fond opaque est un calque à part (jamais le `background` du conteneur) : posé sur
+            tout le sticky, il recouvrait la bande de chevauchement, donc les coins bas du hero
+            — coupés net — et la superposition de la pilule. Au repos il démarre au bord bas du
+            hero ; épinglé, il remonte couvrir la barre entière. `zIndex: -1` = derrière le
+            contenu de la barre, devant le hero (le sticky est son propre contexte d'empilement). */}
+        <div aria-hidden style={{
+          position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: -1,
+          top: stuck ? 0 : STICKY_OVERLAP, background: th.bg,
+        }} />
         <div style={{ padding: '0 18px' }}>
           <LocationSearchPill value={locInput} onChange={setLocInput} onNearMe={locateMe}
             nearActive={!!coords} locating={geoState === 'locating'}
