@@ -39,6 +39,7 @@ const wrap = () => render(<ThemeProvider><ClubDirectory /></ThemeProvider>);
 
 beforeEach(() => {
   jest.clearAllMocks();
+  localStorage.clear(); // les filtres du mode contrôlé persistent en localStorage → sinon fuite entre tests
   authToken = 'tok';
   getSports.mockResolvedValue(sports);
   listClubs.mockResolvedValue([]);
@@ -144,7 +145,7 @@ it('« Effacer les filtres » apparaît sur un filtre actif (nom) et le vide', a
   expect(screen.queryByRole('button', { name: /Effacer les filtres/ })).not.toBeInTheDocument();
 });
 
-it('mode contrôlé (props city/coords) : transmet les valeurs à listClubs et masque ville + géoloc', async () => {
+it('mode contrôlé (props city/coords) : transmet les valeurs à listClubs, masque ville + géoloc, champ nom replié derrière Filtres', async () => {
   authToken = null; // simplifie : pas de filtre sport asynchrone en plus
   render(
     <ThemeProvider>
@@ -160,6 +161,9 @@ it('mode contrôlé (props city/coords) : transmet les valeurs à listClubs et m
 
   expect(screen.queryByPlaceholderText('Ville ou région')).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: /autour de moi/i })).not.toBeInTheDocument();
+  // Le champ « Nom du club » est replié derrière le bouton « Filtres » (fermé par défaut).
+  expect(screen.queryByPlaceholderText('Nom du club')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: /^Filtres/ }));
   expect(screen.getByPlaceholderText('Nom du club')).toBeInTheDocument();
 });
 
@@ -252,4 +256,78 @@ it('onCount reçoit 0 quand listClubs échoue', async () => {
   const onCount = jest.fn();
   render(<ThemeProvider><ClubDirectory onCount={onCount} /></ThemeProvider>);
   await waitFor(() => expect(onCount).toHaveBeenLastCalledWith(0));
+});
+
+describe('mode contrôlé : filtres repliables + mémorisés (page /decouvrir)', () => {
+  beforeEach(() => { authToken = null; listClubs.mockResolvedValue([]); });
+
+  it('badge « Filtres · N » reflète nom + sport', async () => {
+    render(<ThemeProvider><ClubDirectory city="Lyon" /></ThemeProvider>);
+    await waitFor(() => expect(listClubs).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole('button', { name: /^Filtres/ }));
+    expect(screen.getByRole('button', { name: /^Filtres/ }).textContent).not.toMatch(/\d/);
+    fireEvent.change(screen.getByPlaceholderText('Nom du club'), { target: { value: 'Padel' } });
+    expect(screen.getByRole('button', { name: /^Filtres/ }).textContent).toContain('1');
+    fireEvent.click(await screen.findByRole('button', { name: 'Padel' })); // chip sport (fixture `sports`)
+    expect(screen.getByRole('button', { name: /^Filtres/ }).textContent).toContain('2');
+  });
+
+  it('« Effacer » (à côté du bouton Filtres) vide nom + sport', async () => {
+    render(<ThemeProvider><ClubDirectory city="Lyon" /></ThemeProvider>);
+    await waitFor(() => expect(listClubs).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole('button', { name: /^Filtres/ }));
+    fireEvent.change(screen.getByPlaceholderText('Nom du club'), { target: { value: 'Padel' } });
+    expect(screen.getByRole('button', { name: 'Effacer' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Effacer' }));
+    expect((screen.getByPlaceholderText('Nom du club') as HTMLInputElement).value).toBe('');
+    expect(screen.queryByRole('button', { name: 'Effacer' })).not.toBeInTheDocument();
+  });
+
+  it('les filtres se mémorisent entre montages (nom du club)', async () => {
+    const first = render(<ThemeProvider><ClubDirectory city="Lyon" /></ThemeProvider>);
+    await waitFor(() => expect(listClubs).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole('button', { name: /^Filtres/ }));
+    fireEvent.change(screen.getByPlaceholderText('Nom du club'), { target: { value: 'Padel Club' } });
+    await waitFor(() => expect(listClubs).toHaveBeenLastCalledWith(expect.objectContaining({ q: 'Padel Club' })));
+    first.unmount();
+
+    render(<ThemeProvider><ClubDirectory city="Lyon" /></ThemeProvider>);
+    await waitFor(() => expect(listClubs).toHaveBeenLastCalledWith(expect.objectContaining({ q: 'Padel Club' })));
+    expect(screen.getByRole('button', { name: /^Filtres/ }).textContent).toContain('1'); // tiroir fermé, badge restauré
+  });
+
+  it('une mémoire de filtres existante saute le pré-remplissage du sport préféré', async () => {
+    authToken = 'tok';
+    getMyProfile.mockResolvedValue({
+      id: 'u1', email: 'test@palova.fr', firstName: 'Test', lastName: 'User',
+      phone: null, sex: null, birthDate: null, avatarUrl: null, locale: 'fr',
+      isSuperAdmin: false, showInLeaderboard: false,
+      preferredSport: { id: 's2', key: 'tennis', name: 'Tennis' },
+    });
+    localStorage.setItem('palova:discover-clubs-filters', JSON.stringify({ q: '', sport: '' }));
+    render(<ThemeProvider><ClubDirectory city="Lyon" /></ThemeProvider>);
+    await waitFor(() => expect(listClubs).toHaveBeenCalled());
+    // Le sport préféré (tennis) n'est JAMAIS forcé : toutes les invocations gardent sport vide.
+    const calls = listClubs.mock.calls as [{ sport?: string }][];
+    calls.forEach((args) => expect(args[0].sport).toBeUndefined());
+  });
+
+  it('les cartes utilisent le rail compact 272px, comme les cartes de parties', async () => {
+    listClubs.mockResolvedValue([clubFixture]);
+    const { container } = render(<ThemeProvider><ClubDirectory city="Lyon" /></ThemeProvider>);
+    await waitFor(() => expect(screen.getAllByTestId('club-card')).toHaveLength(1));
+    const rail = container.querySelector('.ag-rail') as HTMLElement;
+    expect(rail.style.getPropertyValue('--ag-cols')).toBe('272px');
+    expect(rail.style.getPropertyValue('--ag-mobile-cols')).toBe('272px');
+  });
+
+  it('mode autonome (vitrine anonyme) : recherche toujours visible, rail large inchangé', async () => {
+    listClubs.mockResolvedValue([clubFixture]);
+    const { container } = render(<ThemeProvider><ClubDirectory /></ThemeProvider>);
+    await waitFor(() => expect(screen.getAllByTestId('club-card')).toHaveLength(1));
+    expect(screen.queryByRole('button', { name: /^Filtres/ })).not.toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Nom du club')).toBeInTheDocument();
+    const rail = container.querySelector('.ag-rail') as HTMLElement;
+    expect(rail.style.getPropertyValue('--ag-cols')).toBe('calc((100% - 24px) / 3)');
+  });
 });
