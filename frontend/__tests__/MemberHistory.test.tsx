@@ -503,6 +503,28 @@ it('cockpit : la note libre du membre (ClubMembership.note) est pré-remplie et 
     'club-1', 'mb1', expect.objectContaining({ note: 'Client fidèle, allergique aux tickets CE.' }), 'tok'));
 });
 
+it('cockpit : le pseudo existant est pré-rempli et enregistré', async () => {
+  (api.adminGetMemberHistory as jest.Mock).mockResolvedValue({
+    ...HISTORY, member: { ...HISTORY.member, pseudo: 'SmashMaster' },
+  });
+  renderPage();
+  const pseudo = await screen.findByLabelText('Pseudo');
+  expect(pseudo).toHaveValue('SmashMaster');
+  fireEvent.change(pseudo, { target: { value: 'NouveauPseudo' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+  await waitFor(() => expect(api.adminUpdateMember).toHaveBeenCalledWith(
+    'club-1', 'mb1', expect.objectContaining({ pseudo: 'NouveauPseudo' }), 'tok'));
+});
+
+it('cockpit : sans pseudo, le champ est vide et l’enregistrement envoie null', async () => {
+  renderPage();
+  const pseudo = await screen.findByLabelText('Pseudo');
+  expect(pseudo).toHaveValue('');
+  fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+  await waitFor(() => expect(api.adminUpdateMember).toHaveBeenCalledWith(
+    'club-1', 'mb1', expect.objectContaining({ pseudo: null }), 'tok'));
+});
+
 // ───────────────────────── Bandeau d'alertes ─────────────────────────
 
 it("bandeau d'alertes : reste dû + abonnement qui expire", async () => {

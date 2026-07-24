@@ -7,13 +7,13 @@ import { MemberHistory, UpdateMemberBody } from '@/lib/api';
 import { Kicker, MEMBER_CARD_TINTS, memberCardStyle } from '@/components/admin/members/memberCardUi';
 
 export interface ProfileDraft {
-  firstName: string; lastName: string; phone: string; address: string; postalCode: string; city: string;
+  firstName: string; lastName: string; pseudo: string; phone: string; address: string; postalCode: string; city: string;
   birthDate: string; sex: 'MALE' | 'FEMALE' | ''; membershipNo: string; note: string;
 }
 
 export function draftFromMember(m: MemberHistory['member']): ProfileDraft {
   return {
-    firstName: m.firstName, lastName: m.lastName, phone: m.phone ?? '',
+    firstName: m.firstName, lastName: m.lastName, pseudo: m.pseudo ?? '', phone: m.phone ?? '',
     address: m.address ?? '', postalCode: m.postalCode ?? '', city: m.city ?? '',
     birthDate: m.birthDate ?? '', sex: m.sex ?? '', membershipNo: m.membershipNo ?? '', note: m.note ?? '',
   };
@@ -21,7 +21,7 @@ export function draftFromMember(m: MemberHistory['member']): ProfileDraft {
 
 export function bodyFromDraft(d: ProfileDraft): UpdateMemberBody {
   return {
-    firstName: d.firstName.trim(), lastName: d.lastName.trim(),
+    firstName: d.firstName.trim(), lastName: d.lastName.trim(), pseudo: d.pseudo.trim() || null,
     phone: d.phone.trim() || null, address: d.address.trim() || null,
     postalCode: d.postalCode.trim() || null, city: d.city.trim() || null,
     birthDate: d.birthDate || null, sex: d.sex || null, membershipNo: d.membershipNo.trim() || null,
@@ -54,6 +54,7 @@ export function MemberProfileCard({ member, onSave, error }: {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '9px 8px' }}>
         <div><span style={label}>Prénom</span><input aria-label="Prénom" value={draft.firstName} onChange={(e) => set('firstName', e.target.value)} style={input} /></div>
         <div><span style={label}>Nom</span><input aria-label="Nom" value={draft.lastName} onChange={(e) => set('lastName', e.target.value)} style={input} /></div>
+        <div><span style={label}>Pseudo</span><input aria-label="Pseudo" value={draft.pseudo} onChange={(e) => set('pseudo', e.target.value)} style={input} placeholder="SmashMaster" /></div>
         <div><span style={label}>Téléphone</span><input aria-label="Téléphone" value={draft.phone} onChange={(e) => set('phone', e.target.value)} style={input} /></div>
         <div><span style={label}>Naissance</span><input aria-label="Date de naissance" type="date" value={draft.birthDate} onChange={(e) => set('birthDate', e.target.value)} style={input} /></div>
         <div style={full}><span style={label}>Adresse</span><input aria-label="Adresse" value={draft.address} onChange={(e) => set('address', e.target.value)} style={input} /></div>
