@@ -1583,7 +1583,7 @@ export interface MemberUpcomingEntry {
 
 export interface MemberHistory {
   member: {
-    userId: string; firstName: string; lastName: string; email: string;
+    userId: string; firstName: string; lastName: string; pseudo: string | null; email: string;
     phone: string | null; avatarUrl: string | null;
     isSubscriber: boolean; membershipNo: string | null;
     status: 'ACTIVE' | 'BLOCKED'; watch: boolean; hasActivePackage: boolean; since: string;
@@ -1641,7 +1641,7 @@ export interface PlayerMembership {
 export type CreateMemberBody = { firstName: string; lastName: string; email: string; phone?: string; membershipNo?: string };
 export type UpdateMemberBody = Partial<{
   isSubscriber: boolean; membershipNo: string | null; status: 'ACTIVE' | 'BLOCKED'; note: string | null;
-  phone: string | null; firstName: string; lastName: string;
+  phone: string | null; firstName: string; lastName: string; pseudo: string | null;
   birthDate: string | null; sex: Sex | null;
   address: string | null; postalCode: string | null; city: string | null;
 }>;

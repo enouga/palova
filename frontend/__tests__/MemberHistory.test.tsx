@@ -62,7 +62,7 @@ jest.mock('../lib/api', () => ({
 
 const HISTORY: MemberHistory = {
   member: {
-    userId: 'u1', firstName: 'Jean', lastName: 'Dupont', email: 'j@d.fr', phone: null, avatarUrl: null,
+    userId: 'u1', firstName: 'Jean', lastName: 'Dupont', pseudo: null, email: 'j@d.fr', phone: null, avatarUrl: null,
     isSubscriber: false, membershipNo: null, status: 'ACTIVE', watch: false, hasActivePackage: true, since: '2026-01-01T00:00:00.000Z',
     membershipId: 'mb1', birthDate: '1992-09-04', sex: 'FEMALE',
     address: '12 rue des Sports', postalCode: '31000', city: 'Toulouse',
