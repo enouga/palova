@@ -248,7 +248,7 @@ export function TournamentFinder({
       )}
 
       {hideTitle ? (
-        <div style={{ padding: '18px 20px 0' }}>
+        <div style={{ padding: '8px 20px 0' }}>
           {visibleResults === null && <div style={{ fontFamily: th.fontUI, color: th.textFaint }}>Chargement…</div>}
           {visibleResults?.length === 0 && (
             <div style={{ textAlign: 'center', padding: '18px 0 6px' }}>

@@ -149,7 +149,7 @@ export function DiscoverMatches({
         </div>
       )}
 
-      <div style={{ padding: '18px 20px 0' }}>
+      <div style={{ padding: '8px 20px 0' }}>
         {list.length === 0 ? (
           <div style={{ padding: '18px 0 6px', textAlign: 'center', fontFamily: th.fontUI, color: th.textMute }}>
             <div>Aucune partie ne correspond pour le moment.</div>

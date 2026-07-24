@@ -186,7 +186,7 @@ export function ClubDirectory({ city: cityProp, coords: coordsProp, deptCodes, o
           filtres), aucun plafond de résultats — tout résultat filtré reste atteignable via
           le défilement (les points de pagination du rail se masquent au-delà de 12 cartes).
           Mode contrôlé (/decouvrir) : cartes compactes 272px, comme les cartes de parties. */}
-      <div style={{ padding: '20px 20px 0' }}>
+      <div style={{ padding: controlled ? '8px 20px 0' : '20px 20px 0' }}>
         {loading ? (
           <div style={{ padding: '30px 0', textAlign: 'center', fontFamily: th.fontUI, color: th.textFaint }}>Chargement…</div>
         ) : error ? (
