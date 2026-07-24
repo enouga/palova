@@ -525,6 +525,22 @@ it('cockpit : sans pseudo, le champ est vide et l’enregistrement envoie null',
     'club-1', 'mb1', expect.objectContaining({ pseudo: null }), 'tok'));
 });
 
+it('cockpit : pseudo au format invalide → PSEUDO_INVALID affiché en français', async () => {
+  (api.adminUpdateMember as jest.Mock).mockRejectedValue(new Error('PSEUDO_INVALID'));
+  renderPage();
+  fireEvent.change(await screen.findByLabelText('Pseudo'), { target: { value: 'a b' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+  expect(await screen.findByText(/3 à 20 caractères/i)).toBeInTheDocument();
+});
+
+it('cockpit : pseudo déjà pris → PSEUDO_TAKEN affiché en français', async () => {
+  (api.adminUpdateMember as jest.Mock).mockRejectedValue(new Error('PSEUDO_TAKEN'));
+  renderPage();
+  fireEvent.change(await screen.findByLabelText('Pseudo'), { target: { value: 'SmashMaster' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+  expect(await screen.findByText('Ce pseudo est déjà pris.')).toBeInTheDocument();
+});
+
 // ───────────────────────── Bandeau d'alertes ─────────────────────────
 
 it("bandeau d'alertes : reste dû + abonnement qui expire", async () => {
