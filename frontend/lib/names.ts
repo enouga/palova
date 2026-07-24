@@ -48,3 +48,10 @@ export function shortNamesById(players: NamedPlayer[]): Record<string, string> {
   }
   return Object.fromEntries(players.map((p) => [p.id, label(p)]));
 }
+
+/** Étiquette d'un joueur pour un affichage ponctuel (en-tête de feuille, etc.) : le
+ * pseudo s'il existe, sinon « Prénom Nom ». Sans la désambiguïsation par lot de
+ * `shortNamesById` (usage à un seul joueur à la fois). */
+export function playerLabel(p: { pseudo?: string | null; firstName: string; lastName: string }): string {
+  return p.pseudo ?? `${p.firstName} ${p.lastName}`;
+}

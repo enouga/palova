@@ -1,4 +1,4 @@
-import { shortNamesById } from '@/lib/names';
+import { shortNamesById, playerLabel } from '@/lib/names';
 
 describe('shortNamesById', () => {
   it('rend « Prénom N. »', () => {
@@ -38,5 +38,16 @@ describe('shortNamesById', () => {
       { id: 'a', firstName: 'Jean', lastName: 'de la Fuente' },
       { id: 'b', firstName: 'Jean', lastName: 'Dupont' },
     ])).toEqual({ a: 'Jean De.', b: 'Jean Du.' });
+  });
+});
+
+describe('playerLabel', () => {
+  it('renvoie le pseudo quand il est présent', () => {
+    expect(playerLabel({ pseudo: 'SmashMaster', firstName: 'Marc', lastName: 'A' })).toBe('SmashMaster');
+  });
+
+  it('replie sur "Prénom Nom" sans pseudo', () => {
+    expect(playerLabel({ pseudo: null, firstName: 'Marc', lastName: 'A' })).toBe('Marc A');
+    expect(playerLabel({ firstName: 'Marc', lastName: 'A' })).toBe('Marc A');
   });
 });
