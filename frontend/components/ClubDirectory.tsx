@@ -5,8 +5,7 @@ import { COVER_PHOTOS } from '@/lib/clubCover';
 import { useTheme } from '@/lib/ThemeProvider';
 import { useAuth } from '@/lib/useAuth';
 import { ClubCard } from '@/components/ClubCard';
-import { useScrollRail } from '@/lib/useScrollRail';
-import { RailArrows } from '@/components/ui/RailArrows';
+import { AgendaRail } from '@/components/agenda/AgendaRail';
 import { Icon } from '@/components/ui/Icon';
 
 // Moteur de recherche d'annuaire (nom / ville / sport) + grille de résultats.
@@ -68,8 +67,6 @@ export function ClubDirectory({ city: cityProp, coords: coordsProp, deptCodes, o
   // l'identité pilote le debounce de fetch) pour qu'un changement d'identité de `onCount`
   // ne relance jamais le fetch. `visibleClubs` reflète déjà le résultat (y compris `[]` sur erreur).
   useEffect(() => { onCount?.(visibleClubs.length); }, [visibleClubs.length, onCount]);
-
-  const { railRef, edges, scrollByPage } = useScrollRail([visibleClubs.length]);
 
   const locateMe = () => {
     if (!navigator.geolocation) { setGeoState('denied'); return; }
@@ -134,9 +131,9 @@ export function ClubDirectory({ city: cityProp, coords: coordsProp, deptCodes, o
         )}
       </div>
 
-      {/* résultats — étagère qui défile horizontalement sur 2 lignes (grid-auto-flow:
-          column), pas une grille qui wrap : c'est un vrai annuaire (recherche + filtres),
-          aucun plafond — tout résultat filtré doit rester atteignable via le défilement. */}
+      {/* résultats — rail partagé AgendaRail (1 rangée) : c'est un vrai annuaire (recherche +
+          filtres), aucun plafond de résultats — tout résultat filtré reste atteignable via
+          le défilement (les points de pagination du rail se masquent au-delà de 12 cartes). */}
       <div style={{ padding: '20px 20px 0' }}>
         {loading ? (
           <div style={{ padding: '30px 0', textAlign: 'center', fontFamily: th.fontUI, color: th.textFaint }}>Chargement…</div>
@@ -150,23 +147,13 @@ export function ClubDirectory({ city: cityProp, coords: coordsProp, deptCodes, o
         ) : visibleClubs.length === 0 ? (
           <div style={{ padding: '30px 0', textAlign: 'center', fontFamily: th.fontUI, color: th.textMute }}>Aucun club ne correspond.</div>
         ) : (
-          <>
-            {/* grid-auto-columns en calc((100% - 2*gap) / 3) — pas un px fixe : toujours 3
-                vignettes pleinement visibles dans la largeur du conteneur, sur tout écran
-                (mobile compris), la 4e colonne démarre juste après et se révèle au défilement. */}
-            {/* TOUJOURS une seule ligne qui défile horizontalement (grid-auto-flow: column). */}
-            <style>{`.discover-clubs-grid{display:grid;grid-auto-flow:column;grid-template-rows:auto;grid-auto-columns:calc((100% - 32px) / 3);gap:16px;align-items:start}
-            @media (max-width: 700px) { .discover-clubs-grid{grid-auto-columns:86%} }`}</style>
-            <div style={{ textAlign: 'right', fontFamily: th.fontUI, fontSize: 13, fontWeight: 700, color: th.text, marginBottom: 4 }}>
-              {visibleClubs.length} club{visibleClubs.length > 1 ? 's' : ''}
-            </div>
-            <div style={{ position: 'relative', margin: '0 -20px' }}>
-              <div ref={railRef} className="sp-scroll-x discover-clubs-grid" style={{ padding: '4px 20px 8px', scrollSnapType: 'x proximity', scrollPaddingLeft: 20 }}>
-                {visibleClubs.map((c, i) => <ClubCard key={c.id} club={c} defaultCover={COVER_PHOTOS[i % COVER_PHOTOS.length]} />)}
-              </div>
-              <RailArrows edges={edges} onPrev={() => scrollByPage(-1)} onNext={() => scrollByPage(1)} prevLabel="Clubs précédents" nextLabel="Clubs suivants" fadeBottom={8} />
-            </div>
-          </>
+          <AgendaRail
+            countLabel={`${visibleClubs.length} club${visibleClubs.length > 1 ? 's' : ''}`}
+            desktopColumns="calc((100% - 24px) / 3)" desktopRows={1}
+            prevLabel="Clubs précédents" nextLabel="Clubs suivants"
+          >
+            {visibleClubs.map((c, i) => <ClubCard key={c.id} club={c} defaultCover={COVER_PHOTOS[i % COVER_PHOTOS.length]} />)}
+          </AgendaRail>
         )}
       </div>
     </>
