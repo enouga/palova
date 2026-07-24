@@ -3,6 +3,7 @@ import { prismaMock } from '../../__mocks__/prisma';
 import request from 'supertest';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
+import { Prisma } from '@prisma/client';
 import fs from 'fs';
 import path from 'path';
 import sharp from 'sharp';
@@ -38,7 +39,7 @@ const token = (id = 'u1') => jwt.sign({ id, email: 'test@x.fr' }, process.env.JW
 const PROFILE = {
   id: 'u1', email: 'test@x.fr', firstName: 'Eric', lastName: 'Nougayrede', phone: null, sex: null,
   birthDate: null, avatarUrl: null, locale: 'fr', isSuperAdmin: false, showInLeaderboard: false,
-  autoMatchProposals: false, acceptsFriendRequests: false, acceptsDirectMessages: false,
+  autoMatchProposals: false, acceptsFriendRequests: false, acceptsDirectMessages: false, pseudo: null,
 };
 
 // PNG réel (l'avatar est ré-encodé via sharp — audit pré-MEP §2.3 — donc le contenu
@@ -145,6 +146,60 @@ describe('PATCH /api/me', () => {
     expect(prismaMock.user.update).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ address: '12 rue des Sports', postalCode: '31000', city: null }),
     }));
+  });
+
+  it.each(['ab', 'x'.repeat(21), 'jo jo', 'joël', 'a!b'])('rejette un pseudo invalide « %s » (400)', async (pseudo) => {
+    const res = await request(app).patch('/api/me').set('Authorization', `Bearer ${token()}`).send({ pseudo });
+    expect(res.status).toBe(400);
+  });
+
+  it('rejette un pseudo non-string (400)', async () => {
+    const res = await request(app).patch('/api/me').set('Authorization', `Bearer ${token()}`).send({ pseudo: 42 });
+    expect(res.status).toBe(400);
+  });
+
+  it('enregistre un pseudo valide (trim)', async () => {
+    prismaMock.user.findFirst.mockResolvedValue(null);
+    prismaMock.user.update.mockResolvedValue({ ...PROFILE, pseudo: 'SmashMaster' } as any);
+    const res = await request(app).patch('/api/me').set('Authorization', `Bearer ${token()}`).send({ pseudo: ' SmashMaster ' });
+    expect(res.status).toBe(200);
+    expect(prismaMock.user.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: { pseudo: { equals: 'SmashMaster', mode: 'insensitive' }, NOT: { id: 'u1' } },
+    }));
+    expect(prismaMock.user.update).toHaveBeenCalledWith(expect.objectContaining({ data: { pseudo: 'SmashMaster' } }));
+  });
+
+  it('efface le pseudo avec une chaîne vide (pas de vérif d’unicité)', async () => {
+    prismaMock.user.update.mockResolvedValue(PROFILE as any);
+    const res = await request(app).patch('/api/me').set('Authorization', `Bearer ${token()}`).send({ pseudo: '   ' });
+    expect(res.status).toBe(200);
+    expect(prismaMock.user.findFirst).not.toHaveBeenCalled();
+    expect(prismaMock.user.update).toHaveBeenCalledWith(expect.objectContaining({ data: { pseudo: null } }));
+  });
+
+  it('efface le pseudo avec null', async () => {
+    prismaMock.user.update.mockResolvedValue(PROFILE as any);
+    const res = await request(app).patch('/api/me').set('Authorization', `Bearer ${token()}`).send({ pseudo: null });
+    expect(res.status).toBe(200);
+    expect(prismaMock.user.update).toHaveBeenCalledWith(expect.objectContaining({ data: { pseudo: null } }));
+  });
+
+  it('rejette un pseudo déjà pris, insensible à la casse (409)', async () => {
+    prismaMock.user.findFirst.mockResolvedValue({ id: 'other' } as any);
+    const res = await request(app).patch('/api/me').set('Authorization', `Bearer ${token()}`).send({ pseudo: 'smashmaster' });
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe('Ce pseudo est déjà pris.');
+    expect(prismaMock.user.update).not.toHaveBeenCalled();
+  });
+
+  it('filet anti-course : une contrainte unique violée à l’écriture renvoie 409', async () => {
+    prismaMock.user.findFirst.mockResolvedValue(null);
+    prismaMock.user.update.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError('dup', { code: 'P2002', clientVersion: 'x', meta: { target: ['pseudo'] } }),
+    );
+    const res = await request(app).patch('/api/me').set('Authorization', `Bearer ${token()}`).send({ pseudo: 'SmashMaster' });
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe('Ce pseudo est déjà pris.');
   });
 });
 
