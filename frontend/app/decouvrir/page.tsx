@@ -1,16 +1,17 @@
-import type { Metadata } from 'next';
-import { PLATFORM_OG_IMAGE } from '@/lib/seo';
-import { DiscoverClient } from './DiscoverClient';
+'use client';
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 
-const TITLE = 'Trouvez un club de padel près de chez vous | Palova';
-const DESCRIPTION = 'Parties ouvertes, tournois et clubs de padel partout en France — cherchez par ville, département ou autour de vous.';
-
-export const metadata: Metadata = {
-  title: TITLE,
-  description: DESCRIPTION,
-  openGraph: { title: TITLE, description: DESCRIPTION, images: [{ url: PLATFORM_OG_IMAGE, width: 1200, height: 630 }] },
-};
-
-export default function DecouvrirPage() {
-  return <DiscoverClient />;
+// La page « Où jouer » a fusionné dans l'accueil : ses trois sections filtrables y vivent
+// désormais pour tout le monde, connecté ou non. On redirige les anciens liens / favoris en
+// conservant query ET hash — les ancres #parties / #tournois / #clubs existent à l'identique
+// sur `/`, tout comme la lecture de `?q=` / `?pres=1`.
+// La copie figée de l'ancienne page reste consultable sur /archive/decouvrir.
+export default function DecouvrirRedirect() {
+  const router = useRouter();
+  useEffect(() => {
+    const { search, hash } = window.location;
+    router.replace(`/${search}${hash}`);
+  }, [router]);
+  return null;
 }

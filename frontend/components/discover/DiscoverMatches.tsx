@@ -19,7 +19,7 @@ import { AgendaRail } from '@/components/agenda/AgendaRail';
 // rails de la vitrine — OpenMatchesShowcase à 6, UpcomingTournaments à 4).
 const MAX_VISIBLE = 9;
 
-// Onglet « Parties » de la page /decouvrir : étagère 2 lignes de parties ouvertes nationales
+// Section « Ça joue bientôt » de l'accueil : étagère 2 lignes de parties ouvertes nationales
 // (GET /api/open-matches/national, chargées par le parent) filtrées par date/localisation/
 // niveau et triées par distance. Le sélecteur de date (puces Aujourd'hui/Cette semaine/Ce
 // mois-ci + calendrier « Dates ») est EXACTEMENT celui de la section Tournois (DATE_PRESETS/

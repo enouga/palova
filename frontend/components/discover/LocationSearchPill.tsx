@@ -3,10 +3,11 @@ import { useState } from 'react';
 import { useTheme } from '@/lib/ThemeProvider';
 import { ACCENTS } from '@/lib/theme';
 
-// Barre de recherche flottante des heros brume (vitrine + /decouvrir) : pilule BLANCHE à encres
+// Barre de recherche flottante du hero brume de l'accueil : pilule BLANCHE à encres
 // fixes (elle vit sur la brume — identique clair/sombre), épingle accent, bouton « Autour de
 // moi » en encre. Posée à cheval sur le bord bas du hero (margin-top négatif). Contrôlée par le
-// parent : la vitrine navigue au submit, /decouvrir filtre en direct (onSubmit omis).
+// parent, qui filtre en direct (`onSubmit` omis) ; `onSubmit` reste là pour un appelant qui
+// voudrait naviguer à la validation.
 export const PILL_INK = '#1b2a3f';
 
 export function LocationSearchPill({ value, onChange, onSubmit, onNearMe, nearActive, locating, extra, onClear }: {

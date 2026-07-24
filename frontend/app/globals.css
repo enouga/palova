@@ -249,7 +249,7 @@ button:not([disabled]):active { transform: translateY(0) scale(.97); filter: bri
 /* ── Mon Palova (accueil joueur) : grilles denses, bascule 100 % CSS (pas de useIsDesktop). ──
    .mp-grid    : « À venir » — cartes à tuile-date, auto-fit → les cartes remplissent la largeur
                  (2 cartes = 2 colonnes pleine largeur ; 6 = 3×2) au lieu de laisser une piste vide.
-   .mp-duo     : Mon niveau | Mes clubs côte à côte ≥ 640px, auto-fit → si l'un manque, l'autre remplit.
+   .mp-duo     : Mon niveau | Mon portefeuille côte à côte ≥ 640px, auto-fit → si l'un manque, l'autre remplit.
    .mp-wallet  : lignes du portefeuille sur 2 colonnes ≥ 640px. */
 .mp-grid { display: grid; grid-template-columns: 1fr; gap: 10px; }
 .mp-duo { display: grid; grid-template-columns: 1fr; gap: 14px; align-items: start; }

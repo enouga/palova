@@ -239,10 +239,10 @@ export function TournamentFinder({
     </>
   );
 
-  // Embarqué (hideTitle, /decouvrir) : racine en Fragment — le bouton Filtres devient un
-  // sibling du bloc titre dans la <section> flex du parent (DiscoverClient), pour finir en
-  // bout de ligne du titre plutôt que sur sa propre rangée. Page /tournois autonome (jamais
-  // atteinte en pratique, /tournois redirige désormais vers /decouvrir) : garde son propre
+  // Embarqué (hideTitle, section « Prochains tournois » de l'accueil) : racine en Fragment — le
+  // bouton Filtres devient un sibling du bloc titre dans la <section> flex du parent
+  // (DiscoverSections), pour finir en bout de ligne du titre plutôt que sur sa propre rangée.
+  // Page /tournois autonome (jamais atteinte en pratique, /tournois redirige vers `/#tournois`) : garde son propre
   // conteneur plein écran (fond + hauteur mini), title + filtres + résultats empilés dedans.
   if (hideTitle) {
     return (

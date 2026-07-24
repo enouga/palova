@@ -36,10 +36,14 @@ describe('platformEntries', () => {
   it('liste les pages statiques plateforme, sans /aide (redirection)', () => {
     const urls = platformEntries('palova.fr').map((e) => e.url);
     expect(urls).toEqual(expect.arrayContaining([
-      'https://palova.fr/', 'https://palova.fr/decouvrir', 'https://palova.fr/tarifs',
+      'https://palova.fr/', 'https://palova.fr/tarifs',
       'https://palova.fr/offres', 'https://palova.fr/faq', 'https://palova.fr/cgu',
       'https://palova.fr/cgv', 'https://palova.fr/mentions-legales', 'https://palova.fr/confidentialite',
     ]));
     expect(urls).not.toContain('https://palova.fr/aide');
+  });
+
+  it('n’expose plus /decouvrir : la découverte vit dans `/`, qui la remplace', () => {
+    expect(platformEntries('palova.fr').map((e) => e.url)).not.toContain('https://palova.fr/decouvrir');
   });
 });

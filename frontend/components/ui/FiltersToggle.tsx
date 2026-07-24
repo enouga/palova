@@ -2,7 +2,7 @@
 import { useTheme } from '@/lib/ThemeProvider';
 import { Icon } from '@/components/ui/Icon';
 
-// Bouton repliable « ⚙ Filtres · N » partagé par les tiroirs de filtres de /decouvrir
+// Bouton repliable « ⚙ Filtres · N » partagé par les tiroirs de filtres des sections de découverte
 // (Tournois, Parties, Clubs) — extrait de TournamentFinder.tsx pour un seul langage. Badge
 // compteur, chevron, lien « Effacer » à côté (rendu seulement si count > 0). Le tiroir de
 // contenu (facettes) reste chez l'appelant — ce composant ne rend que la rangée de contrôle.

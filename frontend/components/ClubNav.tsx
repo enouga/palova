@@ -223,9 +223,9 @@ export function ClubNav({ club }: { club: ClubDetail }) {
           <span className="cn-title" style={{ flex: 1, minWidth: 0, fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 18, color: th.text, letterSpacing: -0.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{club.name}</span>
           <div className="cn-actions" style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
             <ThemeToggle />
-            {/* Icône Palova : point d'entrée vers /decouvrir (clubs, parties, tournois), sur l'hôte
+            {/* Icône Palova : point d'entrée vers l'accueil Palova (clubs, parties, tournois), sur l'hôte
                 plateforme — visible de TOUT visiteur (anonyme compris), aucune condition token. */}
-            <a href={platformUrl('/decouvrir')} aria-label="Palova — où jouer : clubs, parties et tournois" title="Palova — où jouer : clubs, parties et tournois"
+            <a href={platformUrl('/')} aria-label="Palova — où jouer : clubs, parties et tournois" title="Palova — où jouer : clubs, parties et tournois"
               style={{ width: 38, height: 38, borderRadius: '50%', background: th.surface2,
                 display: 'flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none', flexShrink: 0 }}>
               <LogoBall size={20} />

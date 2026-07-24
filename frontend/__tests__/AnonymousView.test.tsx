@@ -1,6 +1,6 @@
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { ThemeProvider } from '@/lib/ThemeProvider';
-import AnonymousView from '@/components/platform/AnonymousView';
+import AnonymousView from '@/components/legacy/AnonymousView';
 
 // Sections lourdes mockées : AnonymousView est testé sur sa structure et son pouls.
 jest.mock('@/components/ClubDirectory', () => ({ ClubDirectory: () => <div data-testid="club-directory" /> }));

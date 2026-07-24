@@ -323,11 +323,14 @@ describe('ClubNav', () => {
     expect(screen.queryByLabelText('Espace club')).not.toBeInTheDocument();
   });
 
-  it("affiche l'icône Palova → /decouvrir même sans session (visiteur anonyme), hors sous-domaine club", () => {
+  it("affiche l'icône Palova → accueil plateforme même sans session (visiteur anonyme), hors sous-domaine club", () => {
     wrap();
     const link = screen.getByLabelText('Palova — où jouer : clubs, parties et tournois');
-    expect(link).toHaveAttribute('href', expect.stringContaining('/decouvrir'));
+    // L'ex-page /decouvrir a fusionné dans l'accueil : l'icône y mène directement.
+    expect(link.getAttribute('href')).not.toContain('/decouvrir');
+    // Hôte plateforme (pas le sous-domaine du club courant), racine.
     expect(link.getAttribute('href')).not.toContain('demo.');
+    expect(link.getAttribute('href')).toMatch(/\/$/);
   });
 
   it("affiche l'icône Palova → /decouvrir aussi connecté", () => {

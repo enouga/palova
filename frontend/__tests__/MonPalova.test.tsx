@@ -1,5 +1,5 @@
 import { render, screen, waitFor } from '@testing-library/react';
-import { MonPalova } from '../components/platform/MonPalova';
+import { MonPalova } from '../components/legacy/MonPalova';
 import { ThemeProvider } from '../lib/ThemeProvider';
 
 jest.mock('next/navigation', () => ({ useRouter: () => ({ push: jest.fn(), replace: jest.fn() }) }));

@@ -13,7 +13,7 @@ import { DISCOVER_CLUBS_FILTERS_KEY, clubsStateToStored, storedToClubsFilters } 
 // Moteur de recherche d'annuaire (nom / ville / sport) + grille de résultats.
 // Bloc embeddable : ne rend QUE la recherche + les résultats (pas de Screen ni de titre de page),
 // pour être réutilisé sur /clubs comme sur l'accueil plateforme.
-// Mode contrôlé (props city/coords, page /decouvrir) : la page porte une barre de localisation
+// Mode contrôlé (props city/coords, section « Clubs près de chez vous » de l'accueil) : la page porte une barre de localisation
 // PARTAGÉE (ville + géoloc) au-dessus — le composant masque ses propres contrôles de
 // localisation ; le champ « Nom du club » + les chips sport passent alors derrière un tiroir
 // repliable « Filtres · N » (mémorisé en localStorage) et les cartes utilisent le rail compact

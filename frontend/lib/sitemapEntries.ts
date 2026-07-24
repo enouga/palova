@@ -25,8 +25,9 @@ export function clubDynamicEntries(host: string, tournaments: Tournament[], even
 export function platformEntries(host: string): MetadataRoute.Sitemap {
   const base = `https://${host}`;
   return [
+    // `/` porte désormais AUSSI la découverte (parties/tournois/clubs filtrables) : l'ancienne
+    // entrée `/decouvrir` y redirige et n'a plus de contenu propre à indexer.
     { url: `${base}/`, priority: 1 },
-    { url: `${base}/decouvrir`, priority: 0.9 },
     { url: `${base}/tarifs`, priority: 0.6 },
     { url: `${base}/offres`, priority: 0.6 },
     { url: `${base}/faq`, priority: 0.4 },

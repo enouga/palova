@@ -19,8 +19,10 @@ function clubRules(): NonNullable<MetadataRoute.Robots['rules']> {
 function platformRules(): NonNullable<MetadataRoute.Robots['rules']> {
   return [{
     userAgent: '*',
-    allow: ['/', '/decouvrir', '/tarifs', '/offres', '/faq', '/cgu', '/cgv', '/mentions-legales', '/confidentialite', '/register', '/clubs/new'],
-    disallow: ['/login', '/forgot-password', '/clubs', '/me', '/admin', '/superadmin', '/session-bridge', '/tournois', '/aide'],
+    // `/decouvrir` a fusionné dans l'accueil `/` (il n'y redirige plus que par compatibilité) ;
+    // `/archive` = copies figées des accueils d'avant la fusion, à ne jamais indexer.
+    allow: ['/', '/tarifs', '/offres', '/faq', '/cgu', '/cgv', '/mentions-legales', '/confidentialite', '/register', '/clubs/new'],
+    disallow: ['/login', '/forgot-password', '/clubs', '/me', '/admin', '/superadmin', '/session-bridge', '/tournois', '/decouvrir', '/aide', '/archive'],
   }];
 }
 
