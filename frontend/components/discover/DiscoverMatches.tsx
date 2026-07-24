@@ -4,7 +4,8 @@ import { api, NationalOpenMatch, MyRating } from '@/lib/api';
 import { useAuth } from '@/lib/useAuth';
 import { useTheme } from '@/lib/ThemeProvider';
 import { FacetChip, FacetGroup, FILTER_TINTS } from '@/components/ui/FacetChip';
-import { NationalMatchCard } from '@/components/platform/NationalMatchCard';
+import { OpenMatchRailCard } from '@/components/match/OpenMatchRailCard';
+import { clubUrl } from '@/lib/clubUrl';
 import { filterNationalMatches, sortMatchesByDistance, LocationQuery } from '@/lib/discover';
 import { DatePreset, DATE_PRESETS } from '@/lib/tournamentCalendar';
 import { DateRangeChip } from '@/components/calendar/DateRangeChip';
@@ -141,10 +142,11 @@ export function DiscoverMatches({
         </div>
       ) : (
         <div>
-          <AgendaRail countLabel={count} desktopColumns="270px" desktopRows={1}
+          <AgendaRail countLabel={count} desktopColumns="272px" mobileColumns="272px" desktopRows={1}
             prevLabel="Parties précédentes" nextLabel="Parties suivantes">
             {list.map((r) => (
-              <NationalMatchCard key={r.match.id} match={r.match} distanceKm={r.distanceKm} />
+              <OpenMatchRailCard key={r.match.id} match={r.match} club={r.match.club} distanceKm={r.distanceKm}
+                timezone={r.match.club.timezone} href={clubUrl(r.match.club.slug, `/parties/${r.match.id}`)} />
             ))}
           </AgendaRail>
         </div>
