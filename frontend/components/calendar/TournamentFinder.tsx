@@ -5,15 +5,17 @@ import { api, NationalTournament, TournamentGender } from '@/lib/api';
 import { clubUrl } from '@/lib/clubUrl';
 import { ACCENTS } from '@/lib/theme';
 import { AgendaCard } from '@/components/agenda/AgendaCard';
+import { AgendaRail } from '@/components/agenda/AgendaRail';
 import { FacetPanel } from '@/components/calendar/FacetPanel';
-import { useScrollRail } from '@/lib/useScrollRail';
-import { RailArrows } from '@/components/ui/RailArrows';
+import { FiltersToggle } from '@/components/ui/FiltersToggle';
 import { tournamentPlacesLabel } from '@/lib/clubhouse';
 import { setSpansMultipleSports } from '@/lib/sportBadge';
 import { fillRatio, formatDateTimeRange } from '@/lib/tournament';
 import { norm } from '@/lib/members';
 import {
   CalendarFilterState, DatePreset, emptyCalendarState, applyFilters, calendarFacets,
+  DATE_PRESET_KEYS, activeFilterCount, calendarStateToStored, storedToCalendarState,
+  DISCOVER_TOURNOIS_FILTERS_KEY,
 } from '@/lib/tournamentCalendar';
 
 const GENDER_LABEL: Record<string, string> = { MEN: 'Messieurs', WOMEN: 'Dames', MIXED: 'Mixte' };
@@ -55,6 +57,10 @@ export function TournamentFinder({
   const [fetched, setFetched] = useState<NationalTournament[] | null>(null);
   const selfFetch = preloaded === undefined;
   const [state, setState] = useState<CalendarFilterState>(emptyCalendarState());
+  // Panneau de facettes replié par défaut (mémoire de session = badge « Filtres · N », pas
+  // l'ouverture) : sur /decouvrir la barre de localisation en haut couvre déjà le lieu, le
+  // reste (Quand/Catégorie/Genre) tient derrière ce bouton pour ne pas manger l'écran.
+  const [filtersOpen, setFiltersOpen] = useState(false);
   // coords stored in a ref (not state) so that setting coords and nearMe=true
   // happen in a single state update, avoiding ordering races in the test environment.
   const coordsRef = useRef<{ lat: number; lng: number } | null>(null);
@@ -77,21 +83,31 @@ export function TournamentFinder({
     return () => { clearTimeout(t); clearInterval(h); };
   }, []);
 
-  // Lecture initiale de l'URL : ?quand=&du=&au=&dept=&cat=&genre=&near=
+  // État initial : l'URL prime (lien partageable ?quand=&du=&au=&dept=&cat=&genre=&near=),
+  // sinon repli sur la mémoire de session (localStorage) — la géoloc n'est jamais rejouée
+  // (nearMe absent du stockage). Aucun des deux → état vide.
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
-    const split = (k: string) => (q.get(k) ? q.get(k)!.split(',').filter(Boolean) : []);
-    const preset = q.get('quand') as DatePreset | null;
-    setState((s) => ({
-      ...s,
-      datePreset: (['weekend', 'thisMonth', 'days30', 'months3'] as string[]).includes(preset ?? '') ? preset : null,
-      from: q.get('du') || null,
-      to: q.get('au') || null,
-      deptCodes: new Set(split('dept')),
-      categories: new Set(split('cat')),
-      genders: new Set(split('genre') as TournamentGender[]),
-      nearMe: q.get('near') === '1',
-    }));
+    const hasUrlFilters = OWN_URL_KEYS.some((k) => q.get(k) != null);
+    if (hasUrlFilters) {
+      const split = (k: string) => (q.get(k) ? q.get(k)!.split(',').filter(Boolean) : []);
+      const preset = q.get('quand');
+      setState((s) => ({
+        ...s,
+        datePreset: (DATE_PRESET_KEYS as string[]).includes(preset ?? '') ? (preset as DatePreset) : null,
+        from: q.get('du') || null,
+        to: q.get('au') || null,
+        deptCodes: new Set(split('dept')),
+        categories: new Set(split('cat')),
+        genders: new Set(split('genre') as TournamentGender[]),
+        nearMe: q.get('near') === '1',
+      }));
+    } else {
+      try {
+        const raw = localStorage.getItem(DISCOVER_TOURNOIS_FILTERS_KEY);
+        if (raw) setState((s) => ({ ...storedToCalendarState(JSON.parse(raw)), nearMe: s.nearMe }));
+      } catch { /* stockage indisponible (mode privé/quota) : on reste sur l'état vide */ }
+    }
     urlReady.current = true;
   }, []);
 
@@ -111,6 +127,8 @@ export function TournamentFinder({
     if (state.nearMe) q.set('near', '1');
     const qs = q.toString();
     window.history.replaceState(null, '', (qs ? `?${qs}` : window.location.pathname) + window.location.hash);
+    // Miroir en mémoire de session (nearMe exclu par calendarStateToStored).
+    try { localStorage.setItem(DISCOVER_TOURNOIS_FILTERS_KEY, JSON.stringify(calendarStateToStored(state))); } catch { /* stockage indisponible */ }
   }, [state]);
 
   // Coordonnées fournies par la page hôte (barre de localisation partagée) : seed le ref puis
@@ -188,40 +206,49 @@ export function TournamentFinder({
   // Notifie la page hôte du nombre de résultats affichés (ex. compteur d'onglet).
   useEffect(() => { if (visibleResults) onCount?.(visibleResults.length); }, [visibleResults?.length, onCount]);
 
-  const { railRef, edges, scrollByPage } = useScrollRail([visibleResults?.length ?? 0]);
-
   const clearFilters = () => setState((s) => ({ ...emptyCalendarState(), nearMe: s.nearMe }));
-  const hasActiveFilters = state.deptCodes.size > 0 || state.categories.size > 0 || state.genders.size > 0 || state.datePreset != null || !!state.from || !!state.to;
+  const filterCount = activeFilterCount(state);
+  const hasActiveFilters = filterCount > 0;
 
-  return (
-    // Le 100vh ne vaut que pour la page /tournois autonome — embarquée dans /decouvrir
-    // (hideTitle), la section reprend sa hauteur naturelle (fini l'écran vide sans tournoi).
-    <div style={{ paddingBottom: hideTitle ? 0 : 48, background: th.bg, minHeight: hideTitle ? undefined : '100vh' }}>
-      {!hideTitle && (
-        <div style={{ padding: '22px 20px 0' }}>
-          <div style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 30, color: th.text, letterSpacing: -0.5 }}>Calendrier des tournois</div>
-          <p style={{ fontFamily: th.fontUI, fontSize: 14, color: th.textMute, marginTop: 6 }}>Toutes les épreuves des clubs Palova, partout en France.</p>
+  // Bouton « Filtres » + tiroir de facettes — factorisé pour être référencé une seule fois
+  // dans les deux branches ci-dessous (embarqué /decouvrir vs page /tournois autonome), qui
+  // ne partagent pas le même conteneur racine (voir plus bas).
+  const filtersBlock = facets && (
+    <>
+      {/* Barre repliable : le panneau de facettes est fermé par défaut (le lieu vit dans la
+          pilule de /decouvrir). Un badge « Filtres · N » signale les filtres mémorisés,
+          sinon on ne comprend pas pourquoi la liste est réduite alors qu'aucun filtre n'est
+          visible ; « Effacer » vide sans avoir à déplier. */}
+      <FiltersToggle count={filterCount} open={filtersOpen} onToggle={() => setFiltersOpen((o) => !o)} onClear={clearFilters} controlsId="tournois-facets" />
+      {filtersOpen && (
+        <div id="tournois-facets" style={hideTitle ? { width: '100%' } : undefined}>
+          <FacetPanel
+            facets={facets}
+            state={state}
+            onToggleDept={(c) => toggleIn('deptCodes', c)}
+            onToggleCategory={(c) => toggleIn('categories', c)}
+            onToggleGender={(g) => toggleIn('genders', g)}
+            onSetPreset={(p) => setState((s) => ({ ...s, datePreset: p, from: null, to: null }))}
+            onSetRange={(from, to) => setState((s) => ({ ...s, from, to, datePreset: null }))}
+            onToggleNearMe={toggleNearMe}
+            onClear={clearFilters}
+            nearMeBusy={nearBusy}
+          />
         </div>
       )}
+    </>
+  );
 
-      {facets && (
-        <FacetPanel
-          facets={facets}
-          state={state}
-          onToggleDept={(c) => toggleIn('deptCodes', c)}
-          onToggleCategory={(c) => toggleIn('categories', c)}
-          onToggleGender={(g) => toggleIn('genders', g)}
-          onSetPreset={(p) => setState((s) => ({ ...s, datePreset: p, from: null, to: null }))}
-          onSetRange={(from, to) => setState((s) => ({ ...s, from, to, datePreset: null }))}
-          onToggleNearMe={toggleNearMe}
-          onClear={clearFilters}
-          nearMeBusy={nearBusy}
-          resultCount={results ? results.length : null}
-        />
-      )}
-
-      {hideTitle ? (
-        <div style={{ padding: '18px 20px 0' }}>
+  // Embarqué (hideTitle, /decouvrir) : racine en Fragment — le bouton Filtres devient un
+  // sibling du bloc titre dans la <section> flex du parent (DiscoverClient), pour finir en
+  // bout de ligne du titre plutôt que sur sa propre rangée. Page /tournois autonome (jamais
+  // atteinte en pratique, /tournois redirige désormais vers /decouvrir) : garde son propre
+  // conteneur plein écran (fond + hauteur mini), title + filtres + résultats empilés dedans.
+  if (hideTitle) {
+    return (
+      <>
+        {filtersBlock}
+        <div style={{ padding: '8px 20px 0', width: '100%' }}>
           {visibleResults === null && <div style={{ fontFamily: th.fontUI, color: th.textFaint }}>Chargement…</div>}
           {visibleResults?.length === 0 && (
             <div style={{ textAlign: 'center', padding: '18px 0 6px' }}>
@@ -239,87 +266,89 @@ export function TournamentFinder({
             </div>
           )}
           {visibleResults != null && visibleResults.length > 0 && (
-            <>
-              {/* grid-auto-columns en calc(50% - gap/2) — pas un px fixe : toujours 2
-                  vignettes pleinement visibles dans la largeur du conteneur, sur tout écran
-                  (mobile compris), la 3e colonne démarre juste après et se révèle au
-                  défilement (même traitement que Prochains events / Clubs). */}
-              {/* UNE ligne jusqu'à 4 tournois, 2 rangées au-delà (gridTemplateRows inline, dynamique). */}
-              <style>{`.discover-tournaments-grid{display:grid;grid-auto-flow:column;grid-auto-columns:calc(50% - 6px);gap:12px;align-items:start}
-              @media (max-width: 700px) { .discover-tournaments-grid{grid-template-rows:auto !important;grid-auto-columns:86%} }`}</style>
-              <div style={{ textAlign: 'right', fontFamily: th.fontUI, fontSize: 13, fontWeight: 700, color: th.text, marginBottom: 4 }}>
-                {visibleResults.length} tournoi{visibleResults.length > 1 ? 's' : ''}
-              </div>
-              <div style={{ position: 'relative', margin: '0 -20px' }}>
-                <div ref={railRef} className="sp-scroll-x discover-tournaments-grid" style={{ gridTemplateRows: `repeat(${visibleResults.length <= 4 ? 1 : 2}, auto)`, padding: '4px 20px 8px', scrollSnapType: 'x proximity', scrollPaddingLeft: 20 }}>
-                  {visibleResults.map(({ tournament: t, distanceKm }) => {
-                    const subtitle = [t.club.name, t.club.city, distanceKm != null ? `${Math.round(distanceKm)} km` : null].filter(Boolean).join(' · ');
-                    return (
-                      <AgendaCard
-                        key={t.id}
-                        icon="trophy"
-                        accent={ACCENTS.apricot}
-                        tag={`${t.category} · ${GENDER_LABEL[t.gender]}`}
-                        title={t.name}
-                        subtitle={subtitle}
-                        dateLabel={formatDateTimeRange(t.startTime, t.endTime, t.club.timezone)}
-                        deadline={t.registrationDeadline}
-                        now={now}
-                        ratio={fillRatio(t)}
-                        places={tournamentPlacesLabel(t)}
-                        extra={t.entryFee ? `${t.entryFee} €` : null}
-                        sportLabel={showSport ? (t.sport?.name ?? null) : null}
-                        onClick={() => { window.location.href = clubUrl(t.club.slug, `/tournois/${t.id}`); }}
-                      />
-                    );
-                  })}
-                </div>
-                <RailArrows edges={edges} onPrev={() => scrollByPage(-1)} onNext={() => scrollByPage(1)} prevLabel="Tournois précédents" nextLabel="Tournois suivants" fadeBottom={8} />
-              </div>
-            </>
+            <AgendaRail
+              countLabel={`${visibleResults.length} tournoi${visibleResults.length > 1 ? 's' : ''}`}
+              prevLabel="Tournois précédents" nextLabel="Tournois suivants"
+            >
+              {visibleResults.map(({ tournament: t, distanceKm }) => {
+                const subtitle = [t.club.name, t.club.city, distanceKm != null ? `${Math.round(distanceKm)} km` : null].filter(Boolean).join(' · ');
+                return (
+                  <AgendaCard
+                    key={t.id}
+                    icon="trophy"
+                    accent={ACCENTS.apricot}
+                    tag={`${t.category} · ${GENDER_LABEL[t.gender]}`}
+                    title={t.name}
+                    subtitle={subtitle}
+                    dateLabel={formatDateTimeRange(t.startTime, t.endTime, t.club.timezone)}
+                    deadline={t.registrationDeadline}
+                    now={now}
+                    ratio={fillRatio(t)}
+                    places={tournamentPlacesLabel(t)}
+                    price={t.entryFee ? `${t.entryFee} €` : null}
+                    sportLabel={showSport ? (t.sport?.name ?? null) : null}
+                    onClick={() => { window.location.href = clubUrl(t.club.slug, `/tournois/${t.id}`); }}
+                  />
+                );
+              })}
+            </AgendaRail>
           )}
         </div>
-      ) : (
-        <div style={{ padding: '18px 20px 0', display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {visibleResults === null && <div style={{ fontFamily: th.fontUI, color: th.textFaint }}>Chargement…</div>}
-          {visibleResults?.length === 0 && (
-            <div style={{ textAlign: 'center', padding: '18px 0 6px' }}>
-              <div style={{ fontFamily: th.fontUI, fontSize: 14, color: th.textMute }}>
-                {hasActiveFilters ? 'Aucun tournoi ne correspond à votre recherche.' : 'Aucun tournoi à venir pour le moment.'}
-              </div>
-              {hasActiveFilters && (
-                <button onClick={clearFilters} style={{
-                  marginTop: 12, border: 'none', cursor: 'pointer', borderRadius: 999, padding: '9px 18px',
-                  fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 700, background: th.accent, color: th.onAccent,
-                }}>
-                  Effacer les filtres
-                </button>
-              )}
+      </>
+    );
+  }
+
+  // Page /tournois autonome : conteneur plein écran (fond + hauteur mini), title + filtres +
+  // résultats empilés dedans (jamais atteinte en pratique — /tournois redirige vers
+  // /decouvrir — mais gardée fonctionnelle pour tout futur appelant hors /decouvrir).
+  return (
+    <div style={{ paddingBottom: 48, background: th.bg, minHeight: '100vh' }}>
+      <div style={{ padding: '22px 20px 0' }}>
+        <div style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 30, color: th.text, letterSpacing: -0.5 }}>Calendrier des tournois</div>
+        <p style={{ fontFamily: th.fontUI, fontSize: 14, color: th.textMute, marginTop: 6 }}>Toutes les épreuves des clubs Palova, partout en France.</p>
+      </div>
+
+      {filtersBlock}
+
+      <div style={{ padding: '18px 20px 0', display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {visibleResults === null && <div style={{ fontFamily: th.fontUI, color: th.textFaint }}>Chargement…</div>}
+        {visibleResults?.length === 0 && (
+          <div style={{ textAlign: 'center', padding: '18px 0 6px' }}>
+            <div style={{ fontFamily: th.fontUI, fontSize: 14, color: th.textMute }}>
+              {hasActiveFilters ? 'Aucun tournoi ne correspond à votre recherche.' : 'Aucun tournoi à venir pour le moment.'}
             </div>
-          )}
-          {visibleResults?.map(({ tournament: t, distanceKm }) => {
-            const subtitle = [t.club.name, t.club.city, distanceKm != null ? `${Math.round(distanceKm)} km` : null].filter(Boolean).join(' · ');
-            return (
-              <AgendaCard
-                key={t.id}
-                icon="trophy"
-                accent={ACCENTS.apricot}
-                tag={`${t.category} · ${GENDER_LABEL[t.gender]}`}
-                title={t.name}
-                subtitle={subtitle}
-                dateLabel={formatDateTimeRange(t.startTime, t.endTime, t.club.timezone)}
-                deadline={t.registrationDeadline}
-                now={now}
-                ratio={fillRatio(t)}
-                places={tournamentPlacesLabel(t)}
-                extra={t.entryFee ? `${t.entryFee} €` : null}
-                sportLabel={showSport ? (t.sport?.name ?? null) : null}
-                onClick={() => { window.location.href = clubUrl(t.club.slug, `/tournois/${t.id}`); }}
-              />
-            );
-          })}
-        </div>
-      )}
+            {hasActiveFilters && (
+              <button onClick={clearFilters} style={{
+                marginTop: 12, border: 'none', cursor: 'pointer', borderRadius: 999, padding: '9px 18px',
+                fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 700, background: th.accent, color: th.onAccent,
+              }}>
+                Effacer les filtres
+              </button>
+            )}
+          </div>
+        )}
+        {visibleResults?.map(({ tournament: t, distanceKm }) => {
+          const subtitle = [t.club.name, t.club.city, distanceKm != null ? `${Math.round(distanceKm)} km` : null].filter(Boolean).join(' · ');
+          return (
+            <AgendaCard
+              key={t.id}
+              icon="trophy"
+              accent={ACCENTS.apricot}
+              tag={`${t.category} · ${GENDER_LABEL[t.gender]}`}
+              title={t.name}
+              subtitle={subtitle}
+              dateLabel={formatDateTimeRange(t.startTime, t.endTime, t.club.timezone)}
+              deadline={t.registrationDeadline}
+              now={now}
+              ratio={fillRatio(t)}
+              places={tournamentPlacesLabel(t)}
+              price={t.entryFee ? `${t.entryFee} €` : null}
+              sportLabel={showSport ? (t.sport?.name ?? null) : null}
+              onClick={() => { window.location.href = clubUrl(t.club.slug, `/tournois/${t.id}`); }}
+            />
+          );
+        })}
+      </div>
     </div>
   );
 }

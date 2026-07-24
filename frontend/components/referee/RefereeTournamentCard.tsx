@@ -2,12 +2,13 @@
 import { useTheme } from '@/lib/ThemeProvider';
 import { ACCENTS } from '@/lib/theme';
 import { Avatar } from '@/components/ui/Avatar';
-import { Btn } from '@/components/ui/atoms';
+import { Btn, CardStripe } from '@/components/ui/atoms';
 import { Icon } from '@/components/ui/Icon';
 import { AgendaCardHeader } from '@/components/agenda/AgendaCardHeader';
 import { colorForSeed } from '@/lib/playerColors';
 import { formatDateShortTimeRange, heroPlacesLabel } from '@/lib/tournament';
 import { GENDER_LABEL } from '@/lib/events';
+import { cardStyle } from '@/components/clubhouse/SectionHeader';
 import type { RefereeTournamentRow, RefereeRegistrationRow, RefereePlayerRow, TournamentGender } from '@/lib/api';
 
 /** « 12 / 16 binômes · 2 en attente » — maxTeams est nullable (tournoi sans plafond). */
@@ -87,7 +88,8 @@ export function RefereeTournamentCard({
   const gender = GENDER_LABEL[tournament.gender as TournamentGender] ?? tournament.gender;
 
   return (
-    <div style={{ background: th.surface, borderRadius: 16, padding: '14px 16px', boxShadow: `inset 0 0 0 1px ${th.line}` }}>
+    <div style={{ position: 'relative', overflow: 'hidden', ...cardStyle(th), padding: '14px 16px 14px 19px' }}>
+      <CardStripe color={ACCENTS.apricot} />
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 13 }}>
         <AgendaCardHeader
           icon="trophy"

@@ -115,6 +115,7 @@ beforeEach(() => {
   clubCtx = { slug: null, club: null, loading: false };
   authToken = null;
   window.history.replaceState(null, '', '/decouvrir');
+  localStorage.clear(); // la recherche par lieu + les filtres tournois persistent en localStorage → sinon fuite entre tests
   listNationalOpenMatches.mockResolvedValue([MATCH_PARIS, MATCH_LYON]);
   listNationalTournaments.mockResolvedValue([]);
   getSports.mockResolvedValue([]);
@@ -250,5 +251,20 @@ describe('DiscoverPage', () => {
     wrap();
     await screen.findAllByRole('link', { name: /Rejoindre la partie/ });
     expect(screen.getByRole('button', { name: 'Accueil' })).toBeInTheDocument();
+  });
+
+  it('« Mes clubs » se mémorise entre montages', async () => {
+    authToken = 'tok';
+    getMyMemberships.mockResolvedValue([membership('lyon')]);
+    const first = wrap();
+    await screen.findAllByRole('link', { name: /Rejoindre la partie/ });
+    const chip = await screen.findByRole('button', { name: 'Mes clubs' });
+    fireEvent.click(chip);
+    await waitFor(() => expect(chip).toHaveAttribute('aria-pressed', 'true'));
+    first.unmount();
+
+    wrap();
+    const chip2 = await screen.findByRole('button', { name: 'Mes clubs' });
+    await waitFor(() => expect(chip2).toHaveAttribute('aria-pressed', 'true'));
   });
 });

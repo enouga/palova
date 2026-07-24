@@ -1,20 +1,24 @@
 'use client';
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { api, ClubSummary, Sport } from '@/lib/api';
 import { COVER_PHOTOS } from '@/lib/clubCover';
 import { useTheme } from '@/lib/ThemeProvider';
 import { useAuth } from '@/lib/useAuth';
 import { ClubCard } from '@/components/ClubCard';
-import { useScrollRail } from '@/lib/useScrollRail';
-import { RailArrows } from '@/components/ui/RailArrows';
+import { AgendaRail } from '@/components/agenda/AgendaRail';
 import { Icon } from '@/components/ui/Icon';
+import { FiltersToggle } from '@/components/ui/FiltersToggle';
+import { DISCOVER_CLUBS_FILTERS_KEY, clubsStateToStored, storedToClubsFilters } from '@/lib/discover';
 
 // Moteur de recherche d'annuaire (nom / ville / sport) + grille de résultats.
 // Bloc embeddable : ne rend QUE la recherche + les résultats (pas de Screen ni de titre de page),
 // pour être réutilisé sur /clubs comme sur l'accueil plateforme.
-// Mode contrôlé (props city/coords, ex. future page /decouvrir) : la page porte une barre de
-// localisation PARTAGÉE (ville + géoloc) au-dessus — le composant masque alors ses propres
-// contrôles de localisation et se contente d'appliquer city/coords reçus comme filtre.
+// Mode contrôlé (props city/coords, page /decouvrir) : la page porte une barre de localisation
+// PARTAGÉE (ville + géoloc) au-dessus — le composant masque ses propres contrôles de
+// localisation ; le champ « Nom du club » + les chips sport passent alors derrière un tiroir
+// repliable « Filtres · N » (mémorisé en localStorage) et les cartes utilisent le rail compact
+// 272px (comme les cartes de parties). La vitrine anonyme (mode autonome) garde sa recherche
+// toujours visible, ses cartes larges, et ne mémorise rien.
 export function ClubDirectory({ city: cityProp, coords: coordsProp, deptCodes, onlySlugs, onCount }: { city?: string; coords?: { lat: number; lng: number } | null; deptCodes?: string[]; onlySlugs?: Set<string> | null; onCount?: (n: number) => void } = {}) {
   const { th } = useTheme();
   const { token } = useAuth();
@@ -27,6 +31,7 @@ export function ClubDirectory({ city: cityProp, coords: coordsProp, deptCodes, o
   const [error, setError] = useState(false);
   const [coordsInput, setCoordsInput] = useState<{ lat: number; lng: number } | null>(null);
   const [geoState, setGeoState] = useState<'idle' | 'locating' | 'denied'>('idle');
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   const controlled = cityProp !== undefined || coordsProp !== undefined || deptCodes !== undefined;
   const effCity = controlled ? (cityProp ?? '') : cityInput;
@@ -34,9 +39,30 @@ export function ClubDirectory({ city: cityProp, coords: coordsProp, deptCodes, o
 
   useEffect(() => { api.getSports().then(setSports).catch(() => setSports([])); }, []);
 
-  // Pré-sélectionne le sport préféré du joueur connecté (modifiable librement ensuite).
+  // Restauration des filtres (mode contrôlé seulement — la vitrine anonyme ne mémorise rien).
+  // Déclarée AVANT l'effet de pré-sélection du sport préféré ci-dessous : une entrée stockée
+  // (même vide) doit empêcher ce dernier de forcer un sport (sinon impossible de mémoriser
+  // le choix « Tous »).
+  const skipSportPreselect = useRef(false);
+  useEffect(() => {
+    if (!controlled) return;
+    try {
+      const raw = localStorage.getItem(DISCOVER_CLUBS_FILTERS_KEY);
+      if (raw != null) {
+        skipSportPreselect.current = true;
+        const s = storedToClubsFilters(JSON.parse(raw));
+        setQ(s.q); setSport(s.sport);
+      }
+    } catch { /* stockage indisponible (mode privé/quota) : état par défaut */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Pré-sélectionne le sport préféré du joueur connecté (modifiable librement ensuite) — sauté
+  // si une mémoire de filtres existe déjà (mode contrôlé), pour ne jamais écraser un choix
+  // explicite restauré depuis le stockage.
   useEffect(() => {
     if (!token) return;
+    if (skipSportPreselect.current) return;
     api.getMyProfile(token).then((p) => {
       if (p.preferredSport?.key) setSport((cur) => cur || p.preferredSport!.key);
     }).catch(() => {});
@@ -56,6 +82,15 @@ export function ClubDirectory({ city: cityProp, coords: coordsProp, deptCodes, o
     finally { setLoading(false); }
   }, [q, effCity, effCoords, sport, deptCodes?.join(',')]);
 
+  // Mémorisation des filtres (mode contrôlé seulement), après la restauration (le 1ᵉʳ passage
+  // est sauté — sinon on écrirait l'état par défaut avant que la restauration n'ait pris effet).
+  const wroteClubFiltersOnce = useRef(false);
+  useEffect(() => {
+    if (!controlled) return;
+    if (!wroteClubFiltersOnce.current) { wroteClubFiltersOnce.current = true; return; }
+    try { localStorage.setItem(DISCOVER_CLUBS_FILTERS_KEY, JSON.stringify(clubsStateToStored({ q, sport }))); } catch { /* stockage indisponible */ }
+  }, [controlled, q, sport]);
+
   // Rétrécit les clubs déjà chargés par slug (filtre « Mes clubs » posé par /decouvrir) —
   // purement côté client, `onlySlugs` reste hors des deps de `load()` : basculer le filtre ne
   // redéclenche jamais `listClubs`.
@@ -69,8 +104,6 @@ export function ClubDirectory({ city: cityProp, coords: coordsProp, deptCodes, o
   // ne relance jamais le fetch. `visibleClubs` reflète déjà le résultat (y compris `[]` sur erreur).
   useEffect(() => { onCount?.(visibleClubs.length); }, [visibleClubs.length, onCount]);
 
-  const { railRef, edges, scrollByPage } = useScrollRail([visibleClubs.length]);
-
   const locateMe = () => {
     if (!navigator.geolocation) { setGeoState('denied'); return; }
     setGeoState('locating');
@@ -83,11 +116,10 @@ export function ClubDirectory({ city: cityProp, coords: coordsProp, deptCodes, o
 
   useEffect(() => { const t = setTimeout(load, 200); return () => clearTimeout(t); }, [load]);
 
-  const inputStyle = { flex: 1, minWidth: 0, height: 46, padding: '0 14px', borderRadius: 12, background: th.surface, color: th.text, border: 'none', boxShadow: `inset 0 0 0 1.5px ${th.line}`, fontFamily: th.fontUI, fontSize: 15 } as const;
-
   // Filtres propres à l'annuaire (la localisation en mode contrôlé vient de la barre partagée,
   // réinitialisée à part) : nom + sport, plus ville/géoloc en mode autonome (/clubs).
   const clubFiltersActive = !!q || !!sport || (!controlled && (!!cityInput || !!coordsInput));
+  const clubsFilterCount = (q ? 1 : 0) + (sport ? 1 : 0);
   const resetClubFilters = () => {
     setQ(''); setSport('');
     if (!controlled) { setCityInput(''); setCoordsInput(null); setGeoState('idle'); }
@@ -95,32 +127,46 @@ export function ClubDirectory({ city: cityProp, coords: coordsProp, deptCodes, o
 
   return (
     <>
-      {/* recherche */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '18px 20px 0' }}>
-        <div style={{ display: 'flex', gap: 10 }}>
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Nom du club" style={inputStyle} />
-          {!controlled && (
-            <input value={cityInput} onChange={(e) => setCityInput(e.target.value)} placeholder="Ville ou région" style={inputStyle} />
+      {controlled ? (
+        <>
+          <FiltersToggle count={clubsFilterCount} open={filtersOpen} onToggle={() => setFiltersOpen((o) => !o)} onClear={resetClubFilters} controlsId="clubs-facets" />
+          {filtersOpen && (
+            <div id="clubs-facets" style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '4px 20px 0', width: '100%' }}>
+              <SearchField icon="search" value={q} onChange={setQ} placeholder="Nom du club" />
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+                <button onClick={() => setSport('')} style={chipBtn(th, sport === '')}>Tous</button>
+                {sports.map((s) => (
+                  <button key={s.key} onClick={() => setSport(sport === s.key ? '' : s.key)} style={chipBtn(th, sport === s.key)}>
+                    {s.icon ? `${s.icon} ` : ''}{s.name}
+                  </button>
+                ))}
+              </div>
+            </div>
           )}
-        </div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
-          <button onClick={() => setSport('')} style={chipBtn(th, sport === '')}>Tous</button>
-          {sports.map((s) => (
-            <button key={s.key} onClick={() => setSport(sport === s.key ? '' : s.key)} style={chipBtn(th, sport === s.key)}>
-              {s.icon ? `${s.icon} ` : ''}{s.name}
-            </button>
-          ))}
-          {clubFiltersActive && (
-            <button onClick={resetClubFilters} style={{
-              marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 5, border: 'none', cursor: 'pointer',
-              borderRadius: 999, padding: '6px 12px', background: 'transparent', boxShadow: `inset 0 0 0 1px ${th.lineStrong}`,
-              fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.textMute,
-            }}>
-              <Icon name="x" size={12} color={th.textMute} />Effacer les filtres
-            </button>
-          )}
-        </div>
-        {!controlled && (
+        </>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '18px 20px 0' }}>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <SearchField icon="search" value={q} onChange={setQ} placeholder="Nom du club" />
+            <SearchField icon="pin" value={cityInput} onChange={setCityInput} placeholder="Ville ou région" />
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+            <button onClick={() => setSport('')} style={chipBtn(th, sport === '')}>Tous</button>
+            {sports.map((s) => (
+              <button key={s.key} onClick={() => setSport(sport === s.key ? '' : s.key)} style={chipBtn(th, sport === s.key)}>
+                {s.icon ? `${s.icon} ` : ''}{s.name}
+              </button>
+            ))}
+            {clubFiltersActive && (
+              <button onClick={resetClubFilters} style={{
+                marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 5, border: 'none', cursor: 'pointer',
+                borderRadius: 999, padding: '6px 12px', background: 'transparent', boxShadow: `inset 0 0 0 1px ${th.lineStrong}`,
+                fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.textMute,
+              }}>
+                <Icon name="x" size={12} color={th.textMute} />Effacer les filtres
+              </button>
+            )}
+          </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
             <button onClick={locateMe} style={chipBtn(th, !!coordsInput)}>
               📍 {coordsInput ? 'Autour de moi ✓' : geoState === 'locating' ? 'Localisation…' : 'Autour de moi'}
@@ -131,13 +177,14 @@ export function ClubDirectory({ city: cityProp, coords: coordsProp, deptCodes, o
               </span>
             )}
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
-      {/* résultats — étagère qui défile horizontalement sur 2 lignes (grid-auto-flow:
-          column), pas une grille qui wrap : c'est un vrai annuaire (recherche + filtres),
-          aucun plafond — tout résultat filtré doit rester atteignable via le défilement. */}
-      <div style={{ padding: '20px 20px 0' }}>
+      {/* résultats — rail partagé AgendaRail (1 rangée) : c'est un vrai annuaire (recherche +
+          filtres), aucun plafond de résultats — tout résultat filtré reste atteignable via
+          le défilement (les points de pagination du rail se masquent au-delà de 12 cartes).
+          Mode contrôlé (/decouvrir) : cartes compactes 272px, comme les cartes de parties. */}
+      <div style={{ padding: controlled ? '8px 20px 0' : '20px 20px 0', width: '100%' }}>
         {loading ? (
           <div style={{ padding: '30px 0', textAlign: 'center', fontFamily: th.fontUI, color: th.textFaint }}>Chargement…</div>
         ) : error ? (
@@ -150,23 +197,14 @@ export function ClubDirectory({ city: cityProp, coords: coordsProp, deptCodes, o
         ) : visibleClubs.length === 0 ? (
           <div style={{ padding: '30px 0', textAlign: 'center', fontFamily: th.fontUI, color: th.textMute }}>Aucun club ne correspond.</div>
         ) : (
-          <>
-            {/* grid-auto-columns en calc((100% - 2*gap) / 3) — pas un px fixe : toujours 3
-                vignettes pleinement visibles dans la largeur du conteneur, sur tout écran
-                (mobile compris), la 4e colonne démarre juste après et se révèle au défilement. */}
-            {/* TOUJOURS une seule ligne qui défile horizontalement (grid-auto-flow: column). */}
-            <style>{`.discover-clubs-grid{display:grid;grid-auto-flow:column;grid-template-rows:auto;grid-auto-columns:calc((100% - 32px) / 3);gap:16px;align-items:start}
-            @media (max-width: 700px) { .discover-clubs-grid{grid-auto-columns:86%} }`}</style>
-            <div style={{ textAlign: 'right', fontFamily: th.fontUI, fontSize: 13, fontWeight: 700, color: th.text, marginBottom: 4 }}>
-              {visibleClubs.length} club{visibleClubs.length > 1 ? 's' : ''}
-            </div>
-            <div style={{ position: 'relative', margin: '0 -20px' }}>
-              <div ref={railRef} className="sp-scroll-x discover-clubs-grid" style={{ padding: '4px 20px 8px', scrollSnapType: 'x proximity', scrollPaddingLeft: 20 }}>
-                {visibleClubs.map((c, i) => <ClubCard key={c.id} club={c} defaultCover={COVER_PHOTOS[i % COVER_PHOTOS.length]} />)}
-              </div>
-              <RailArrows edges={edges} onPrev={() => scrollByPage(-1)} onNext={() => scrollByPage(1)} prevLabel="Clubs précédents" nextLabel="Clubs suivants" fadeBottom={8} />
-            </div>
-          </>
+          <AgendaRail
+            countLabel={`${visibleClubs.length} club${visibleClubs.length > 1 ? 's' : ''}`}
+            desktopColumns={controlled ? '272px' : 'calc((100% - 24px) / 3)'} desktopRows={1}
+            mobileColumns={controlled ? '272px' : undefined}
+            prevLabel="Clubs précédents" nextLabel="Clubs suivants"
+          >
+            {visibleClubs.map((c, i) => <ClubCard key={c.id} club={c} defaultCover={COVER_PHOTOS[i % COVER_PHOTOS.length]} />)}
+          </AgendaRail>
         )}
       </div>
     </>
@@ -180,4 +218,37 @@ function chipBtn(th: ReturnType<typeof useTheme>['th'], active: boolean): React.
     background: active ? th.ink : th.surface2,
     color: active ? (th.mode === 'floodlit' ? th.text : '#f7f5ee') : th.textMute,
   };
+}
+
+// Champ de recherche en pilule (icône insérée + croix d'effacement) — remplace l'ancien input
+// brut sans icône (« très moche » : rectangle plat, aucun affordance de recherche).
+function SearchField({ icon, value, onChange, placeholder }: {
+  icon: 'search' | 'pin'; value: string; onChange: (v: string) => void; placeholder: string;
+}) {
+  const { th } = useTheme();
+  return (
+    <div style={{ position: 'relative', flex: 1, minWidth: 0 }}>
+      <Icon name={icon} size={16} color={th.textFaint} style={{
+        position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none',
+      }} />
+      <input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        style={{
+          width: '100%', height: 46, padding: `0 ${value ? 38 : 14}px 0 40px`, borderRadius: 999,
+          background: th.surface, color: th.text, border: 'none', boxShadow: `inset 0 0 0 1.5px ${th.line}`,
+          fontFamily: th.fontUI, fontSize: 15,
+        }}
+      />
+      {value && (
+        <button type="button" aria-label={`Effacer « ${placeholder} »`} onClick={() => onChange('')} style={{
+          position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
+          border: 'none', cursor: 'pointer', background: th.surface2, color: th.textMute,
+          width: 24, height: 24, borderRadius: 999, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 12, fontWeight: 700, lineHeight: 1, WebkitTapHighlightColor: 'transparent',
+        }}>✕</button>
+      )}
+    </div>
+  );
 }

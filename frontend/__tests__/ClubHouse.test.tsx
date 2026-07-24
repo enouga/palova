@@ -4,7 +4,8 @@ import { ThemeProvider } from '../lib/ThemeProvider';
 
 let mockAuth: { token: string | null; clubId: string | null; ready: boolean } = { token: null, clubId: null, ready: true };
 jest.mock('../lib/useAuth', () => ({ useAuth: () => mockAuth }));
-jest.mock('next/navigation', () => ({ useRouter: () => ({ push: jest.fn() }) }));
+const routerPush = jest.fn();
+jest.mock('next/navigation', () => ({ useRouter: () => ({ push: routerPush }) }));
 
 // Stub des sections pour tester l'ORDRE sans leur logique interne :
 jest.mock('../components/clubhouse/OpenMatchesShowcase', () => ({ OpenMatchesShowcase: () => <div data-testid="sec-matches" /> }));
@@ -133,7 +134,8 @@ describe('ClubHouse', () => {
     }] as never);
     wrap();
     expect(await screen.findByText('Mêlée du vendredi')).toBeInTheDocument();
-    expect(screen.getByText('Mêlée du vendredi').closest('a')).toHaveAttribute('href', '/events/e1');
+    fireEvent.click(screen.getByText('Mêlée du vendredi'));
+    expect(routerPush).toHaveBeenCalledWith('/events/e1');
   });
 
   it('visiteur : parties en tête, puis Le club ; offres avant top, partenaires en dernier', async () => {

@@ -11,8 +11,6 @@ import { TournamentGender } from '@/lib/api';
 const GENDER_LABEL: Record<string, string> = { MEN: 'Messieurs', WOMEN: 'Dames', MIXED: 'Mixte' };
 const DEPT_VISIBLE = 8; // nombre de départements montrés avant « + tous »
 
-type Th = ReturnType<typeof useTheme>['th'];
-
 export interface FacetPanelProps {
   facets: ReturnType<typeof calendarFacets>;
   state: CalendarFilterState;
@@ -24,16 +22,15 @@ export interface FacetPanelProps {
   onToggleNearMe: () => void;
   onClear: () => void;
   nearMeBusy?: boolean;
-  /** Nombre de résultats affichés (pied du tiroir) — fourni par la page hôte. */
-  resultCount?: number | null;
 }
 
 // Panneau de filtres des tournois (partagé /decouvrir + /tournois) : UN tiroir compact au
 // langage d'EventsFilterBar — groupes labellisés côte à côte (flex-wrap), chips ✓/compteurs,
-// pied « N résultats · Effacer les filtres ». Les briques FacetChip/FacetGroup viennent
-// désormais du module partagé `@/components/ui/FacetChip` (teintes fixes par groupe,
-// FILTER_TINTS) — ce ne sont plus des copies locales.
-export function FacetPanel({ facets, state, onToggleDept, onToggleCategory, onToggleGender, onSetPreset, onSetRange, onToggleNearMe, onClear, nearMeBusy, resultCount }: FacetPanelProps) {
+// pied « Effacer les filtres » (le compte de résultats vit dans le rail, pas ici — un seul
+// compteur par section). Les briques FacetChip/FacetGroup viennent désormais du module
+// partagé `@/components/ui/FacetChip` (teintes fixes par groupe, FILTER_TINTS) — ce ne sont
+// plus des copies locales.
+export function FacetPanel({ facets, state, onToggleDept, onToggleCategory, onToggleGender, onSetPreset, onSetRange, onToggleNearMe, onClear, nearMeBusy }: FacetPanelProps) {
   const { th } = useTheme();
   const [showAllDepts, setShowAllDepts] = useState(false);
 
@@ -72,8 +69,13 @@ export function FacetPanel({ facets, state, onToggleDept, onToggleCategory, onTo
               <FacetChip key={d.code} label={d.name} tint={FILTER_TINTS.ou} count={d.count} active={state.deptCodes.has(d.code)} onClick={() => onToggleDept(d.code)} />
             ))}
             {facets.departments.length > DEPT_VISIBLE && (
-              <button onClick={() => setShowAllDepts((v) => !v)} style={linkBtn(th)}>
-                {showAllDepts ? 'voir moins' : `+ ${facets.departments.length - DEPT_VISIBLE}`}
+              <button onClick={() => setShowAllDepts((v) => !v)} style={{
+                display: 'inline-flex', alignItems: 'center', border: 'none', cursor: 'pointer',
+                borderRadius: 999, padding: '5px 11px', fontFamily: th.fontUI, fontSize: 13, fontWeight: 600,
+                background: 'transparent', color: th.textMute, boxShadow: `inset 0 0 0 1px ${th.line}`,
+                WebkitTapHighlightColor: 'transparent',
+              }}>
+                {showAllDepts ? 'Voir moins' : `+ ${facets.departments.length - DEPT_VISIBLE}`}
               </button>
             )}
           </FacetGroup>
@@ -96,11 +98,7 @@ export function FacetPanel({ facets, state, onToggleDept, onToggleCategory, onTo
         </div>
 
         {hasActive && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '9px 14px', borderTop: `1px solid ${th.line}` }}>
-            <span style={{ fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 700, color: th.text }}>
-              {resultCount != null && `${resultCount} résultat${resultCount > 1 ? 's' : ''}`}
-            </span>
-            <span style={{ flex: 1 }} />
+          <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '9px 14px', borderTop: `1px solid ${th.line}` }}>
             <button onClick={onClear} style={{
               display: 'inline-flex', alignItems: 'center', gap: 5, border: 'none', cursor: 'pointer',
               borderRadius: 999, padding: '4px 11px', background: 'transparent',
@@ -114,8 +112,4 @@ export function FacetPanel({ facets, state, onToggleDept, onToggleCategory, onTo
       </div>
     </div>
   );
-}
-
-function linkBtn(th: Th): React.CSSProperties {
-  return { border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.textFaint, padding: '5px 8px' };
 }

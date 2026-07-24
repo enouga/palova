@@ -6,7 +6,7 @@ import { useAuth } from '@/lib/useAuth';
 import { useTheme } from '@/lib/ThemeProvider';
 import { hardNavigate } from '@/lib/nav';
 import { platformUrl } from '@/lib/clubUrl';
-import { parseLocationQuery } from '@/lib/discover';
+import { parseLocationQuery, DISCOVER_LOCATION_KEY, DISCOVER_MINE_ONLY_KEY } from '@/lib/discover';
 import { Screen } from '@/components/ui/Screen';
 import { Logotype, ThemeToggle, BackButton } from '@/components/ui/atoms';
 import { ProfileMenu } from '@/components/ProfileMenu';
@@ -101,15 +101,42 @@ export function DiscoverClient() {
   );
 
   // Deep-links posés par le hero de la vitrine : ?q= préremplit la recherche, ?pres=1 lance la
-  // géoloc à l'arrivée. Lus une fois au montage (même idiome que le hash plus bas).
+  // géoloc à l'arrivée. Lus une fois au montage (même idiome que le hash plus bas). À défaut de
+  // ?q=, on restaure la dernière recherche par lieu mémorisée (localStorage) — la géoloc, elle,
+  // n'est jamais rejouée automatiquement.
   useEffect(() => {
     if (slug) return;
     const params = new URLSearchParams(window.location.search);
     const q = params.get('q');
     if (q) setLocInput(q);
+    else { try { const saved = localStorage.getItem(DISCOVER_LOCATION_KEY); if (saved) setLocInput(saved); } catch { /* stockage indispo */ } }
     if (params.get('pres') === '1') locateMe();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug]);
+
+  // Mémorise le texte de recherche par lieu d'une session à l'autre (le montage est sauté pour
+  // ne pas écraser la valeur restaurée avant sa relecture).
+  const wroteLocOnce = useRef(false);
+  useEffect(() => {
+    if (slug) return;
+    if (!wroteLocOnce.current) { wroteLocOnce.current = true; return; }
+    try { localStorage.setItem(DISCOVER_LOCATION_KEY, locInput); } catch { /* stockage indispo */ }
+  }, [slug, locInput]);
+
+  // « Mes clubs » mémorisé d'une session à l'autre (comme la recherche par lieu et les filtres
+  // Tournois/Parties/Clubs) — ne s'applique, comme aujourd'hui, que si une adhésion active existe.
+  useEffect(() => {
+    if (slug) return;
+    try { if (localStorage.getItem(DISCOVER_MINE_ONLY_KEY) === '1') setMineOnly(true); }
+    catch { /* stockage indisponible */ }
+  }, [slug]);
+
+  const wroteMineOnlyOnce = useRef(false);
+  useEffect(() => {
+    if (slug) return;
+    if (!wroteMineOnlyOnce.current) { wroteMineOnlyOnce.current = true; return; }
+    try { localStorage.setItem(DISCOVER_MINE_ONLY_KEY, mineOnly ? '1' : '0'); } catch { /* stockage indisponible */ }
+  }, [slug, mineOnly]);
 
   useEffect(() => {
     if (slug) return;
@@ -155,9 +182,14 @@ export function DiscoverClient() {
   return (
     <Screen>
       <div style={{ paddingBottom: 40 }}>
+        {/* En-tête sur UNE ligne : le retour « Accueil » vit à côté du logo (avant, il occupait
+            sa propre rangée et décalait tout le contenu d'une ligne). */}
         <div style={{ padding: '28px 20px 6px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <Logotype size={22} />
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+              <Logotype size={22} />
+              <BackButton href="/" label="Accueil" />
+            </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <ThemeToggle />
               <ProfileMenu />
@@ -165,15 +197,16 @@ export function DiscoverClient() {
           </div>
         </div>
 
-        <div style={{ padding: '4px 20px 0' }}>
-          <BackButton href="/" label="Accueil" />
-        </div>
-
         {/* Mini-hero brume : l'établi ne re-séduit pas (pas de titre-promesse — le hero complet
-            vit sur la vitrine anonyme) ; petite France en filigrane pour la continuité. */}
+            vit sur la vitrine anonyme) ; petite France en filigrane pour la continuité.
+            ⚠️ La France est posée en TAILLE ET POSITION FIXES (px), pas via le centrage par
+            défaut de .pl-france-hero : ce hero est une bande basse dont le bas est recouvert
+            par la pilule de recherche (margin-top négatif), donc une silhouette centrée sur
+            la hauteur TOTALE passe sous la pilule et paraît rognée. Ces valeurs la gardent
+            entière dans la bande réellement visible. */}
         <div style={{ padding: '10px 18px 0' }}>
-          <div style={{ position: 'relative', overflow: 'hidden', borderRadius: 22, background: HERO_GRADIENT, padding: '26px 24px 46px' }}>
-            <FranceDotsMap pins="few" style={{ height: '150%', right: -20, opacity: 0.55 }} />
+          <div style={{ position: 'relative', overflow: 'hidden', borderRadius: 22, background: HERO_GRADIENT, padding: '38px 24px 74px' }}>
+            <FranceDotsMap pins="few" style={{ height: 96, top: 8, transform: 'none', right: 24, opacity: 0.55 }} />
             <div style={{ position: 'relative', fontFamily: th.fontBrand, fontSize: 15, letterSpacing: 3, textTransform: 'uppercase', color: HERO_INK_MUTED }}>
               Où jouer
             </div>
@@ -189,7 +222,7 @@ export function DiscoverClient() {
               onClear={() => { setLocInput(''); setCoords(null); setGeoState('idle'); }}
               extra={myClubsChipVisible && (
                 <button type="button" onClick={() => setMineOnly((v) => !v)} aria-pressed={mineOnly}
-                  aria-label="Mes clubs" title="Mes clubs" style={{
+                  aria-label="Mes clubs" title="Filtrer sur ses clubs" style={{
                     flexShrink: 0, border: 'none', cursor: 'pointer', width: 42, height: 42, borderRadius: 999,
                     background: mineOnly ? ACCENTS.blue : '#eef1f6',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -215,17 +248,17 @@ export function DiscoverClient() {
           />
         </div>
 
-        <section id="parties" data-section="parties" ref={(el) => { sectionRefs.current.parties = el; }} style={{ paddingTop: 10 }}>
-          <div style={{ padding: '0 20px' }}>
+        <section id="parties" data-section="parties" ref={(el) => { sectionRefs.current.parties = el; }} style={{ paddingTop: 10, display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+          <div style={{ padding: '0 20px', flex: '1 1 auto', minWidth: 0 }}>
             <div style={kickStyle}>{tick}Parties ouvertes</div>
             <h2 style={titleStyle}>Ça joue bientôt</h2>
-            <DiscoverMatches matches={filteredMatches} location={location} coords={coords} now={now}
-              onSeeClubs={() => jumpTo('clubs')} onCount={onCountParties} />
           </div>
+          <DiscoverMatches matches={filteredMatches} location={location} coords={coords} now={now}
+            onSeeClubs={() => jumpTo('clubs')} onCount={onCountParties} />
         </section>
 
-        <section id="tournois" data-section="tournois" ref={(el) => { sectionRefs.current.tournois = el; }} style={{ paddingTop: 26 }}>
-          <div style={{ padding: '0 20px' }}>
+        <section id="tournois" data-section="tournois" ref={(el) => { sectionRefs.current.tournois = el; }} style={{ paddingTop: 26, display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+          <div style={{ padding: '0 20px', flex: '1 1 auto', minWidth: 0 }}>
             <div style={kickStyle}>{tick}Compétition</div>
             <h2 style={titleStyle}>Tournois</h2>
           </div>
@@ -233,8 +266,8 @@ export function DiscoverClient() {
             city={location.city ?? ''} deptCodes={location.deptCodes} onCount={onCountTournois} />
         </section>
 
-        <section id="clubs" data-section="clubs" ref={(el) => { sectionRefs.current.clubs = el; }} style={{ paddingTop: 26 }}>
-          <div style={{ padding: '0 20px' }}>
+        <section id="clubs" data-section="clubs" ref={(el) => { sectionRefs.current.clubs = el; }} style={{ paddingTop: 26, display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+          <div style={{ padding: '0 20px', flex: '1 1 auto', minWidth: 0 }}>
             <div style={kickStyle}>{tick}Annuaire</div>
             <h2 style={titleStyle}>Clubs</h2>
           </div>
