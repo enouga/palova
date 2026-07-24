@@ -237,7 +237,7 @@ const RAIL_CSS = `
 .ag-rail{display:grid;grid-auto-flow:column;gap:12px;align-items:stretch;grid-auto-columns:var(--ag-cols);grid-template-rows:var(--ag-rows);scroll-snap-type:x proximity;scroll-padding-left:20px}
 .ag-rail>*{scroll-snap-align:start}
 .ag-dots{display:flex;gap:6px;justify-content:center;padding-top:10px}
-@media (max-width:699.98px){.ag-rail{grid-auto-columns:calc(100% - 26px);grid-template-rows:auto;scroll-snap-type:x mandatory}.ag-arrows{display:none}}
+@media (max-width:699.98px){.ag-rail{grid-auto-columns:calc(100% - 6px);grid-template-rows:auto;scroll-snap-type:x mandatory}.ag-arrows{display:none}}
 @media (min-width:700px){.ag-dots{display:none}}
 `;
 
