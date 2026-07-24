@@ -129,6 +129,25 @@ describe('OpenMatchChatService', () => {
       broadcastSpy.mockRestore();
     });
 
+    it('expose le pseudo de l’auteur dans le DTO quand renseigné', async () => {
+      primeAccessOk();
+
+      const fakeRow = {
+        id: 'msg-2',
+        body: 'Salut !',
+        createdAt: new Date('2026-06-28T10:00:00Z'),
+        deletedAt: null,
+        user: { id: 'org', firstName: 'Eric', lastName: 'N', avatarUrl: null, pseudo: 'SmashMaster' },
+      };
+      prismaMock.openMatchMessage.create.mockResolvedValue(fakeRow as any);
+      const broadcastSpy = jest.spyOn(SSEService.getInstance(), 'broadcastMatch').mockImplementation(() => {});
+
+      const dto = await service.postMessage('club-demo', 'resa-1', 'org', 'Salut !');
+
+      expect(dto.author.pseudo).toBe('SmashMaster');
+      broadcastSpy.mockRestore();
+    });
+
     it('au-delà de 12 messages/min → RATE_LIMITED', async () => {
       primeAccessOk();
       redisMock.incr.mockResolvedValue(13);

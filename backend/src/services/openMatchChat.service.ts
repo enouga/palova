@@ -8,7 +8,7 @@ const MAX_BODY = 2000;
 
 export interface ChatMessageDTO {
   id: string;
-  author: { userId: string; firstName: string; lastName: string; avatarUrl: string | null };
+  author: { userId: string; firstName: string; lastName: string; avatarUrl: string | null; pseudo: string | null };
   body: string;
   createdAt: string;
   deleted: boolean;
@@ -23,14 +23,14 @@ interface ChatContext {
 
 type MsgRow = {
   id: string; body: string; createdAt: Date; editedAt?: Date | null; deletedAt: Date | null;
-  user: { id: string; firstName: string; lastName: string; avatarUrl: string | null };
+  user: { id: string; firstName: string; lastName: string; avatarUrl: string | null; pseudo: string | null };
 };
 
 function toDTO(m: MsgRow): ChatMessageDTO {
   const deleted = m.deletedAt != null;
   return {
     id: m.id,
-    author: { userId: m.user.id, firstName: m.user.firstName, lastName: m.user.lastName, avatarUrl: m.user.avatarUrl },
+    author: { userId: m.user.id, firstName: m.user.firstName, lastName: m.user.lastName, avatarUrl: m.user.avatarUrl, pseudo: m.user.pseudo },
     body: deleted ? '' : m.body,
     createdAt: m.createdAt.toISOString(),
     deleted,
@@ -72,7 +72,7 @@ export class OpenMatchChatService {
       orderBy: { createdAt: 'asc' },
       select: {
         id: true, body: true, createdAt: true, editedAt: true, deletedAt: true,
-        user: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } },
+        user: { select: { id: true, firstName: true, lastName: true, avatarUrl: true, pseudo: true } },
       },
     });
     return rows.map(toDTO);
@@ -89,7 +89,7 @@ export class OpenMatchChatService {
       data: { reservationId, userId, body },
       select: {
         id: true, body: true, createdAt: true, editedAt: true, deletedAt: true,
-        user: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } },
+        user: { select: { id: true, firstName: true, lastName: true, avatarUrl: true, pseudo: true } },
       },
     });
     const dto = toDTO(created);
@@ -118,7 +118,7 @@ export class OpenMatchChatService {
       data: { body, editedAt: new Date() },
       select: {
         id: true, body: true, createdAt: true, editedAt: true, deletedAt: true,
-        user: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } },
+        user: { select: { id: true, firstName: true, lastName: true, avatarUrl: true, pseudo: true } },
       },
     });
     const dto = toDTO(updated);
@@ -164,7 +164,7 @@ export class OpenMatchChatService {
       where: { id: messageId },
       select: {
         id: true, reservationId: true, userId: true, body: true, createdAt: true, deletedAt: true,
-        user: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } },
+        user: { select: { id: true, firstName: true, lastName: true, avatarUrl: true, pseudo: true } },
       },
     });
     if (!msg || msg.reservationId !== reservationId) throw new Error('MESSAGE_NOT_FOUND');
@@ -188,7 +188,7 @@ export class OpenMatchChatService {
       data: { deletedAt: new Date(), deletedById: userId },
       select: {
         id: true, body: true, createdAt: true, editedAt: true, deletedAt: true,
-        user: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } },
+        user: { select: { id: true, firstName: true, lastName: true, avatarUrl: true, pseudo: true } },
       },
     });
     const dto = toDTO(updated);
