@@ -44,7 +44,7 @@ export interface MemberUpcomingEntry {
 
 export interface MemberHistory {
   member: {
-    userId: string; firstName: string; lastName: string; email: string;
+    userId: string; firstName: string; lastName: string; pseudo: string | null; email: string;
     phone: string | null; avatarUrl: string | null;
     isSubscriber: boolean; membershipNo: string | null;
     status: 'ACTIVE' | 'BLOCKED';
@@ -121,7 +121,7 @@ export class MemberStatsService {
         isReferee: true, note: true,
         user: {
           select: {
-            firstName: true, lastName: true, email: true, phone: true, avatarUrl: true, isSuperAdmin: true,
+            firstName: true, lastName: true, pseudo: true, email: true, phone: true, avatarUrl: true, isSuperAdmin: true,
             birthDate: true, sex: true, address: true, postalCode: true, city: true,
           },
         },
@@ -446,7 +446,7 @@ export class MemberStatsService {
     return {
       member: {
         userId,
-        firstName: membership.user.firstName, lastName: membership.user.lastName,
+        firstName: membership.user.firstName, lastName: membership.user.lastName, pseudo: membership.user.pseudo,
         email: membership.user.email, phone: membership.user.phone, avatarUrl: membership.user.avatarUrl,
         isSubscriber: membership.isSubscriber, membershipNo: membership.membershipNo,
         status: membership.status, watch: membership.watch, hasActivePackage,

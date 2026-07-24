@@ -62,7 +62,7 @@ jest.mock('../lib/api', () => ({
 
 const HISTORY: MemberHistory = {
   member: {
-    userId: 'u1', firstName: 'Jean', lastName: 'Dupont', email: 'j@d.fr', phone: null, avatarUrl: null,
+    userId: 'u1', firstName: 'Jean', lastName: 'Dupont', pseudo: null, email: 'j@d.fr', phone: null, avatarUrl: null,
     isSubscriber: false, membershipNo: null, status: 'ACTIVE', watch: false, hasActivePackage: true, since: '2026-01-01T00:00:00.000Z',
     membershipId: 'mb1', birthDate: '1992-09-04', sex: 'FEMALE',
     address: '12 rue des Sports', postalCode: '31000', city: 'Toulouse',
@@ -501,6 +501,44 @@ it('cockpit : la note libre du membre (ClubMembership.note) est pré-remplie et 
   fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
   await waitFor(() => expect(api.adminUpdateMember).toHaveBeenCalledWith(
     'club-1', 'mb1', expect.objectContaining({ note: 'Client fidèle, allergique aux tickets CE.' }), 'tok'));
+});
+
+it('cockpit : le pseudo existant est pré-rempli et enregistré', async () => {
+  (api.adminGetMemberHistory as jest.Mock).mockResolvedValue({
+    ...HISTORY, member: { ...HISTORY.member, pseudo: 'SmashMaster' },
+  });
+  renderPage();
+  const pseudo = await screen.findByLabelText('Pseudo');
+  expect(pseudo).toHaveValue('SmashMaster');
+  fireEvent.change(pseudo, { target: { value: 'NouveauPseudo' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+  await waitFor(() => expect(api.adminUpdateMember).toHaveBeenCalledWith(
+    'club-1', 'mb1', expect.objectContaining({ pseudo: 'NouveauPseudo' }), 'tok'));
+});
+
+it('cockpit : sans pseudo, le champ est vide et l’enregistrement envoie null', async () => {
+  renderPage();
+  const pseudo = await screen.findByLabelText('Pseudo');
+  expect(pseudo).toHaveValue('');
+  fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+  await waitFor(() => expect(api.adminUpdateMember).toHaveBeenCalledWith(
+    'club-1', 'mb1', expect.objectContaining({ pseudo: null }), 'tok'));
+});
+
+it('cockpit : pseudo au format invalide → PSEUDO_INVALID affiché en français', async () => {
+  (api.adminUpdateMember as jest.Mock).mockRejectedValue(new Error('PSEUDO_INVALID'));
+  renderPage();
+  fireEvent.change(await screen.findByLabelText('Pseudo'), { target: { value: 'a b' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+  expect(await screen.findByText(/3 à 20 caractères/i)).toBeInTheDocument();
+});
+
+it('cockpit : pseudo déjà pris → PSEUDO_TAKEN affiché en français', async () => {
+  (api.adminUpdateMember as jest.Mock).mockRejectedValue(new Error('PSEUDO_TAKEN'));
+  renderPage();
+  fireEvent.change(await screen.findByLabelText('Pseudo'), { target: { value: 'SmashMaster' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+  expect(await screen.findByText('Ce pseudo est déjà pris.')).toBeInTheDocument();
 });
 
 // ───────────────────────── Bandeau d'alertes ─────────────────────────

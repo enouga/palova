@@ -91,6 +91,8 @@ const STAFF_ERRORS: Record<string, string> = {
   CANNOT_CHANGE_OWNER: 'Le rôle du gérant ne peut pas être modifié.',
   CANNOT_CHANGE_SELF: 'Vous ne pouvez pas modifier votre propre rôle.',
   MEMBER_IS_STAFF: "Ce membre a un rôle staff : retirez d'abord son rôle (carte « Rôle & accès ») avant de le bloquer ou de le supprimer.",
+  PSEUDO_INVALID: 'Le pseudo doit contenir 3 à 20 caractères (lettres, chiffres, - ou _), sans espace ni accent.',
+  PSEUDO_TAKEN: 'Ce pseudo est déjà pris.',
 };
 
 function StatCard({ label, value, unit, hint, accent, danger }: { label: string; value: string | number; unit?: string; hint?: string; accent?: boolean; danger?: boolean }) {
@@ -249,7 +251,10 @@ export default function MemberHistoryPage() {
   const saveProfile = async (body: UpdateMemberBody) => {
     if (!token || !clubId || !data) return;
     try { setActionError(null); await api.adminUpdateMember(clubId, data.member.membershipId, body, token); await load(); }
-    catch (e) { setActionError((e as Error).message === 'VALIDATION_ERROR' ? 'Vérifiez les champs saisis.' : (e as Error).message); }
+    catch (e) {
+      const msg = (e as Error).message;
+      setActionError(STAFF_ERRORS[msg] ?? (msg === 'VALIDATION_ERROR' ? 'Vérifiez les champs saisis.' : msg));
+    }
   };
 
   const setRole = async (role: StaffRole) => {

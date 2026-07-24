@@ -84,6 +84,8 @@ const ERROR_STATUS: Record<string, number> = {
   ALREADY_CANCELLED:     409,
   USER_NOT_FOUND:        404,
   MEMBER_NOT_FOUND:      404,
+  PSEUDO_INVALID:        400,
+  PSEUDO_TAKEN:           409,
   REFEREE_INVALID:       400,  // J/A désigné qui n'est pas un membre ACTIVE portant la facette (create/update tournoi)
   CANNOT_CHANGE_OWNER:   403,
   CANNOT_CHANGE_SELF:    409,
@@ -417,10 +419,10 @@ router.patch('/members/:id/blocked', async (req: ClubScopedRequest, res: Respons
 
 router.patch('/members/:id', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try {
-    const { isSubscriber, membershipNo, status, note, phone, firstName, lastName, birthDate, sex, address, postalCode, city } = req.body;
+    const { isSubscriber, membershipNo, status, note, phone, firstName, lastName, birthDate, sex, address, postalCode, city, pseudo } = req.body;
     res.json(await clubService.updateMembership(
       req.membership!.clubId, asString(req.params.id),
-      { isSubscriber, membershipNo, status, note, phone, firstName, lastName, birthDate, sex, address, postalCode, city },
+      { isSubscriber, membershipNo, status, note, phone, firstName, lastName, birthDate, sex, address, postalCode, city, pseudo },
       req.user!.id,
     ));
   } catch (err) { handleError(err, res, next); }
