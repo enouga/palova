@@ -5,6 +5,7 @@ import { api, NationalTournament } from '@/lib/api';
 import { clubUrl, platformUrl } from '@/lib/clubUrl';
 import { ACCENTS } from '@/lib/theme';
 import { AgendaCard } from '@/components/agenda/AgendaCard';
+import { AgendaRail } from '@/components/agenda/AgendaRail';
 import { tournamentPlacesLabel } from '@/lib/clubhouse';
 import { setSpansMultipleSports } from '@/lib/sportBadge';
 import { fillRatio, formatDateTimeRange } from '@/lib/tournament';
@@ -39,26 +40,28 @@ export function UpcomingTournaments({ items: preloaded, hideTitle }: { items?: N
           📅 Prochains tournois
         </div>
       )}
-      <div style={{ padding: '12px 20px 0', display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {top.map((t) => (
-          <AgendaCard
-            key={t.id}
-            icon="trophy"
-            accent={ACCENTS.apricot}
-            tag={`${t.category} · ${GENDER_LABEL[t.gender]}`}
-            title={t.name}
-            subtitle={[t.club.name, t.club.city].filter(Boolean).join(' · ')}
-            dateLabel={formatDateTimeRange(t.startTime, t.endTime, t.club.timezone)}
-            deadline={t.registrationDeadline}
-            now={now}
-            ratio={fillRatio(t)}
-            places={tournamentPlacesLabel(t)}
-            price={t.entryFee ? `${t.entryFee} €` : null}
-            sportLabel={showSport ? (t.sport?.name ?? null) : null}
-            onClick={() => { window.location.href = clubUrl(t.club.slug, `/tournois/${t.id}`); }}
-          />
-        ))}
-        <a href={platformUrl('/decouvrir#tournois')} style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 14.5, color: th.text, textDecoration: 'none', marginTop: 2 }}>
+      <div style={{ padding: '12px 20px 0' }}>
+        <AgendaRail prevLabel="Tournois précédents" nextLabel="Tournois suivants">
+          {top.map((t) => (
+            <AgendaCard
+              key={t.id}
+              icon="trophy"
+              accent={ACCENTS.apricot}
+              tag={`${t.category} · ${GENDER_LABEL[t.gender]}`}
+              title={t.name}
+              subtitle={[t.club.name, t.club.city].filter(Boolean).join(' · ')}
+              dateLabel={formatDateTimeRange(t.startTime, t.endTime, t.club.timezone)}
+              deadline={t.registrationDeadline}
+              now={now}
+              ratio={fillRatio(t)}
+              places={tournamentPlacesLabel(t)}
+              price={t.entryFee ? `${t.entryFee} €` : null}
+              sportLabel={showSport ? (t.sport?.name ?? null) : null}
+              onClick={() => { window.location.href = clubUrl(t.club.slug, `/tournois/${t.id}`); }}
+            />
+          ))}
+        </AgendaRail>
+        <a href={platformUrl('/decouvrir#tournois')} style={{ display: 'inline-block', marginTop: 10, fontFamily: th.fontUI, fontWeight: 700, fontSize: 14.5, color: th.text, textDecoration: 'none' }}>
           Voir tout le calendrier →
         </a>
       </div>
