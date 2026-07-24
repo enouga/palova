@@ -11,6 +11,7 @@ import { Icon } from '@/components/ui/Icon';
 import { AddPlayerSheet } from '@/components/match/AddPlayerSheet';
 import type { PlayerPillData } from '@/components/player/PlayerPills';
 import { MatchTeams, MatchPlayerData } from '@/components/match/MatchTeams';
+import { playerLabel } from '@/lib/names';
 import { rangeLabel } from '@/lib/levelMatch';
 import { MatchShareButton } from '@/components/openmatch/MatchShareButton';
 import { matchShareUrl, matchShareText } from '@/lib/matchShare';
@@ -130,7 +131,7 @@ export function OpenMatchCard({
       </div>
       <MatchTeams
         players={m.players.map((p) => ({
-          userId: p.userId, firstName: p.firstName, lastName: p.lastName,
+          userId: p.userId, firstName: p.firstName, lastName: p.lastName, pseudo: p.pseudo,
           avatarUrl: p.avatarUrl, isOrganizer: p.isOrganizer, level: p.level,
           team: (p.team ?? 1) as 1 | 2,
           slot: p.slot,
@@ -196,7 +197,7 @@ export function OpenMatchCard({
           slug={slug} token={token}
           team={addMode.kind === 'add' ? addMode.team : addMode.player.team}
           slot={addMode.kind === 'add' ? addMode.slot : undefined}
-          replaceName={addMode.kind === 'replace' ? `${addMode.player.firstName} ${addMode.player.lastName}` : undefined}
+          replaceName={addMode.kind === 'replace' ? playerLabel(addMode.player) : undefined}
           excludeIds={m.players.map((p) => p.userId)}
           busy={busy}
           onPick={(member) => {
