@@ -8,8 +8,7 @@ import { NationalMatchCard } from '@/components/platform/NationalMatchCard';
 import { filterNationalMatches, sortMatchesByDistance, LocationQuery } from '@/lib/discover';
 import { DatePreset, DATE_PRESETS } from '@/lib/tournamentCalendar';
 import { DateRangeChip } from '@/components/calendar/DateRangeChip';
-import { useScrollRail } from '@/lib/useScrollRail';
-import { RailArrows } from '@/components/ui/RailArrows';
+import { AgendaRail } from '@/components/agenda/AgendaRail';
 import { Icon } from '@/components/ui/Icon';
 
 // Rail de découverte, pas un flux exhaustif : on plafonne l'affichage (comme les autres
@@ -68,8 +67,6 @@ export function DiscoverMatches({
   useEffect(() => {
     if (ranked) onCount?.(ranked.length);
   }, [ranked?.length, onCount]);
-
-  const { railRef, edges, scrollByPage } = useScrollRail([ranked?.length ?? 0]);
 
   if (matches == null || now == null) {
     return (
@@ -144,23 +141,12 @@ export function DiscoverMatches({
         </div>
       ) : (
         <div>
-          {/* Étagère : cartes à largeur fixe (270px), TOUJOURS sur une seule ligne qui défile
-              horizontalement (grid-auto-flow: column). align-items: stretch + CTA en bas
-              (NationalMatchCard) → hauteurs égales, les boutons s'alignent même si une carte
-              est plus haute. */}
-          <div style={{ textAlign: 'right', fontFamily: th.fontUI, fontSize: 13, fontWeight: 700, color: th.text, marginBottom: 4 }}>{count}</div>
-          <div style={{ position: 'relative', margin: '0 -20px' }}>
-            <div ref={railRef} className="sp-scroll-x" style={{
-              display: 'grid', gridTemplateRows: 'auto',
-              gridAutoFlow: 'column', gridAutoColumns: '270px', gap: 14, alignItems: 'stretch',
-              padding: '4px 20px 8px', scrollSnapType: 'x proximity', scrollPaddingLeft: 20,
-            }}>
-              {list.map((r) => (
-                <NationalMatchCard key={r.match.id} match={r.match} distanceKm={r.distanceKm} style={{ scrollSnapAlign: 'start' }} />
-              ))}
-            </div>
-            <RailArrows edges={edges} onPrev={() => scrollByPage(-1)} onNext={() => scrollByPage(1)} prevLabel="Parties précédentes" nextLabel="Parties suivantes" fadeBottom={8} />
-          </div>
+          <AgendaRail countLabel={count} desktopColumns="270px" desktopRows={1}
+            prevLabel="Parties précédentes" nextLabel="Parties suivantes">
+            {list.map((r) => (
+              <NationalMatchCard key={r.match.id} match={r.match} distanceKm={r.distanceKm} />
+            ))}
+          </AgendaRail>
         </div>
       )}
     </div>
