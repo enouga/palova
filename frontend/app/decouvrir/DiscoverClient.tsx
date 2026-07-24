@@ -182,9 +182,14 @@ export function DiscoverClient() {
   return (
     <Screen>
       <div style={{ paddingBottom: 40 }}>
+        {/* En-tête sur UNE ligne : le retour « Accueil » vit à côté du logo (avant, il occupait
+            sa propre rangée et décalait tout le contenu d'une ligne). */}
         <div style={{ padding: '28px 20px 6px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <Logotype size={22} />
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+              <Logotype size={22} />
+              <BackButton href="/" label="Accueil" />
+            </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <ThemeToggle />
               <ProfileMenu />
@@ -192,15 +197,16 @@ export function DiscoverClient() {
           </div>
         </div>
 
-        <div style={{ padding: '4px 20px 0' }}>
-          <BackButton href="/" label="Accueil" />
-        </div>
-
         {/* Mini-hero brume : l'établi ne re-séduit pas (pas de titre-promesse — le hero complet
-            vit sur la vitrine anonyme) ; petite France en filigrane pour la continuité. */}
+            vit sur la vitrine anonyme) ; petite France en filigrane pour la continuité.
+            ⚠️ La France est posée en TAILLE ET POSITION FIXES (px), pas via le centrage par
+            défaut de .pl-france-hero : ce hero est une bande basse dont le bas est recouvert
+            par la pilule de recherche (margin-top négatif), donc une silhouette centrée sur
+            la hauteur TOTALE passe sous la pilule et paraît rognée. Ces valeurs la gardent
+            entière dans la bande réellement visible. */}
         <div style={{ padding: '10px 18px 0' }}>
-          <div style={{ position: 'relative', overflow: 'hidden', borderRadius: 22, background: HERO_GRADIENT, padding: '26px 24px 46px' }}>
-            <FranceDotsMap pins="few" style={{ height: '150%', right: -20, opacity: 0.55 }} />
+          <div style={{ position: 'relative', overflow: 'hidden', borderRadius: 22, background: HERO_GRADIENT, padding: '38px 24px 74px' }}>
+            <FranceDotsMap pins="few" style={{ height: 96, top: 8, transform: 'none', right: 24, opacity: 0.55 }} />
             <div style={{ position: 'relative', fontFamily: th.fontBrand, fontSize: 15, letterSpacing: 3, textTransform: 'uppercase', color: HERO_INK_MUTED }}>
               Où jouer
             </div>
