@@ -55,47 +55,45 @@ export function ResultsToRecord({ token, clubSlug, onRecorded }: {
           const [team1, team2] = teamRows(m.players);
           const avatars = [...team1, ...team2];
           return (
-            <div key={m.reservationId} style={{
-              display: 'flex', alignItems: 'center', gap: 12,
-              padding: '11px 18px', borderTop: `1px solid ${th.line}`,
-            }}>
-              <span style={{ display: 'flex', flexShrink: 0 }}>
-                {avatars.map((p, i) => (
-                  <span key={p.userId} style={{
-                    marginLeft: i === 0 ? 0 : -7, borderRadius: '50%',
-                    border: `2px solid ${th.surface}`, display: 'flex', flexShrink: 0,
-                  }}>
-                    <Avatar firstName={p.firstName} lastName={p.lastName} avatarUrl={p.avatarUrl} size={26} color={colorForSeed(p.userId)} />
-                  </span>
-                ))}
-              </span>
+            <div key={m.reservationId} className="results-row" style={{ padding: '11px 18px', borderTop: `1px solid ${th.line}` }}>
+              <div className="results-head" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <span style={{ display: 'flex', flexShrink: 0 }}>
+                  {avatars.map((p, i) => (
+                    <span key={p.userId} style={{
+                      marginLeft: i === 0 ? 0 : -7, borderRadius: '50%',
+                      border: `2px solid ${th.surface}`, display: 'flex', flexShrink: 0,
+                    }}>
+                      <Avatar firstName={p.firstName} lastName={p.lastName} avatarUrl={p.avatarUrl} size={26} color={colorForSeed(p.userId)} />
+                    </span>
+                  ))}
+                </span>
 
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{
-                  fontFamily: th.fontUI, fontWeight: 700, fontSize: 13.5, color: th.text,
-                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                }}>
-                  <span>{teamLabel(team1, m.players)}</span>
-                  <span style={{ color: th.textFaint, fontWeight: 600, fontSize: 11.5, margin: '0 6px' }}>vs</span>
-                  <span>{teamLabel(team2, m.players)}</span>
-                </div>
-                <div style={{
-                  fontFamily: th.fontMono, fontSize: 11, color: th.textMute, marginTop: 2,
-                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                }}>
-                  {m.resourceName} · {fmtWhen(m.startTime, m.club.timezone)}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{
+                    fontFamily: th.fontUI, fontWeight: 700, fontSize: 13.5, color: th.text, lineHeight: 1.4,
+                  }}>
+                    <span>{teamLabel(team1, m.players)}</span>
+                    <span style={{ color: th.textFaint, fontWeight: 600, fontSize: 11.5, margin: '0 6px' }}>vs</span>
+                    <span>{teamLabel(team2, m.players)}</span>
+                  </div>
+                  <div style={{
+                    fontFamily: th.fontMono, fontSize: 11, color: th.textMute, marginTop: 2,
+                  }}>
+                    {m.resourceName} · {fmtWhen(m.startTime, m.club.timezone)}
+                  </div>
                 </div>
               </div>
 
-              {m.competitive === false && <Chip tone="line">Pour le fun</Chip>}
-
-              <button type="button" onClick={() => setRecordingFor(m)} style={{
-                flexShrink: 0, border: 'none', cursor: 'pointer', borderRadius: 99,
-                padding: '8px 16px', background: th.accent, color: th.onAccent,
-                fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 700,
-              }}>
-                Saisir
-              </button>
+              <div className="results-actions" style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8 }}>
+                {m.competitive === false && <Chip tone="line">Pour le fun</Chip>}
+                <button type="button" onClick={() => setRecordingFor(m)} style={{
+                  flexShrink: 0, border: 'none', cursor: 'pointer', borderRadius: 99,
+                  padding: '8px 16px', background: th.accent, color: th.onAccent,
+                  fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 700,
+                }}>
+                  Saisir
+                </button>
+              </div>
             </div>
           );
         })}

@@ -66,6 +66,18 @@ describe('POST /api/reservations/hold (multi-joueurs)', () => {
 
     expect(res.status).toBe(400);
   });
+
+  it('429 RATE_LIMITED au-delà de 20 holds/min pour le même joueur', async () => {
+    mockDouble();
+    redisMock.incr.mockResolvedValue(21);
+
+    const res = await request(app).post('/api/reservations/hold').set('Authorization', `Bearer ${token}`)
+      .send({ resourceId: 'court-1', ...slot() });
+
+    expect(res.status).toBe(429);
+    expect(res.body.error).toBe('RATE_LIMITED');
+    expect(prismaMock.reservation.create).not.toHaveBeenCalled();
+  });
 });
 
 const token2 = () => jwt.sign({ id: 'u1', email: 'test@x.fr' }, SECRET);

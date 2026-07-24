@@ -5,6 +5,7 @@ import { reportError } from './observability/reportError';
 import { errorHandler } from './observability/errorHandler';
 import express, { Request, Response } from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
 import authRouter from './routes/auth';
 import meRouter from './routes/me';
 import sportsRouter from './routes/sports';
@@ -42,6 +43,17 @@ const app = express();
 // Derrière un seul proxy inverse (Caddy) : req.ip = vraie IP client (dernier saut de
 // X-Forwarded-For), résistant au spoofing. Indispensable au rate limiting par IP.
 app.set('trust proxy', 1);
+
+// En-têtes de sécurité HTTP de base (HSTS/nosniff/frameguard/referrer…). Caddy pose déjà
+// les mêmes en prod (Caddyfile § security_headers) — ce filet couvre le dev (backend servi
+// nu sur :3001, sans Caddy devant) et tout accès direct au backend en prod. `crossOriginResourcePolicy`
+// est desserré en 'cross-origin' : l'API sert des images consommées cross-origin par le
+// frontend (avatars, logos, icônes PWA, cartes OG de partage) sur d'AUTRES domaines/sous-domaines
+// (palova.fr, *.palova.fr, palova.app, *.palova.app) — le défaut 'same-origin' de helmet
+// casserait leur chargement dans le navigateur.
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+}));
 
 // Domaines racines acceptés (multi-domaines, ex. "palova.fr,palova.app"). Repli
 // rétro-compat sur l'ancienne variable singulière, puis localhost (dev).

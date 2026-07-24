@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { api } from '@/lib/api';
-import { validSets, winnerFromSets } from '@/lib/match';
+import { validSets, winnerFromSets, teamFirstNamesLabel } from '@/lib/match';
 import { emptyGrid, applyDigit, backspace as gridBackspace, gridToSets, setWinner, type Grid } from '@/lib/scoreGrid';
 import { useTheme } from '@/lib/ThemeProvider';
 import { ACCENTS, inkOn } from '@/lib/theme';
@@ -174,7 +174,7 @@ export function MatchResultModal({ reservationId, players, token, onClose, onSav
           <>
             <div className="mb-3 flex flex-col gap-2">
               {([1, 2] as const).map((n) => {
-                const names = teamNames(n).map((p) => `${p.firstName} ${p.lastName}`).join(' & ');
+                const names = teamFirstNamesLabel(teamNames(n), players);
                 return (
                   <div key={n} className="flex items-center gap-2 rounded-lg px-3 py-2" style={{ background: th.surface2 }}>
                     <span style={{ width: 9, height: 9, borderRadius: '50%', background: TEAM_COLORS[n], flexShrink: 0 }} />

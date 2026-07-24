@@ -1,3 +1,5 @@
+import '../../__mocks__/redis';
+import { redisMock } from '../../__mocks__/redis';
 import request from 'supertest';
 import app from '../../app';
 
@@ -63,5 +65,24 @@ describe('routes clubs — GET /api/clubs/:slug/availability', () => {
 
     expect(res.status).toBe(400);
     expect(mockBySlug).not.toHaveBeenCalled();
+  });
+
+  it('renvoie 429 RATE_LIMITED quand la limite par IP est dépassée', async () => {
+    redisMock.incr.mockResolvedValue(241); // > 240/min
+
+    const res = await request(app).get('/api/clubs/padel-arena/availability?date=2026-07-18&duration=60');
+
+    expect(res.status).toBe(429);
+    expect(res.body).toEqual({ error: 'RATE_LIMITED' });
+    expect(mockBySlug).not.toHaveBeenCalled();
+  });
+
+  it('fail-open : si Redis est indisponible, la lecture n\'est jamais bloquée', async () => {
+    redisMock.incr.mockRejectedValue(new Error('Redis down'));
+    mockBySlug.mockResolvedValue([]);
+
+    const res = await request(app).get('/api/clubs/padel-arena/availability?date=2026-07-18&duration=60');
+
+    expect(res.status).toBe(200);
   });
 });

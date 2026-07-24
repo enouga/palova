@@ -34,7 +34,8 @@ export function TournamentsAlaUne({ items, timezone, now = null, multiSport = fa
       {/* grid-auto-columns en calc(50% - gap/2) — pas un px fixe : toujours 2 vignettes
           pleinement visibles dans la largeur du conteneur, sur tout écran (mobile compris),
           la 3e colonne démarre juste après et se révèle au défilement. */}
-      <style>{`.ta-grid{display:grid;grid-template-rows:repeat(2,auto);grid-auto-flow:column;grid-auto-columns:calc(50% - 5px);gap:10px;align-items:start}`}</style>
+      <style>{`.ta-grid{display:grid;grid-template-rows:repeat(2,auto);grid-auto-flow:column;grid-auto-columns:calc(50% - 5px);gap:10px;align-items:start}
+      @media (max-width: 700px) { .ta-grid{grid-template-rows:auto;grid-auto-columns:86%} }`}</style>
       <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 12 }}>
         <span aria-hidden="true" style={{ width: 28, height: 28, borderRadius: 9, flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: th.mode === 'floodlit' ? `${ACCENTS.apricot}26` : `${ACCENTS.apricot}40` }}>
           <Icon name="trophy" size={15} color={th.mode === 'floodlit' ? ACCENTS.apricot : th.ink} />

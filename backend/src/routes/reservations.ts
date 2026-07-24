@@ -47,6 +47,7 @@ const ERROR_STATUS: Record<string, number> = {
   TEAM_INVALID:             400,
   TEAM_SIDE_FULL:           400,
   TEAM_SLOT_TAKEN:          400,
+  RATE_LIMITED:             429,
 };
 
 function asString(v: unknown): string {

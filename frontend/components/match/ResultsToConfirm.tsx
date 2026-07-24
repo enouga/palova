@@ -88,8 +88,8 @@ export function ResultsToConfirm({ token, clubSlug, onChanged }: {
           metaParts.push(`Auto-confirmé ${fmtDeadline(m.confirmDeadline, m.club.timezone)}`);
 
           return (
-            <div key={m.matchId} style={{ padding: '11px 18px', borderTop: `1px solid ${th.line}` }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div key={m.matchId} className="results-row" style={{ padding: '11px 18px', borderTop: `1px solid ${th.line}` }}>
+              <div className="results-head" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                 <span style={{ display: 'flex', flexShrink: 0 }}>
                   {avatars.map((p, i) => (
                     <span key={p.userId} style={{
@@ -103,8 +103,7 @@ export function ResultsToConfirm({ token, clubSlug, onChanged }: {
 
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{
-                    fontFamily: th.fontUI, fontWeight: 700, fontSize: 13.5, color: th.text,
-                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                    fontFamily: th.fontUI, fontWeight: 700, fontSize: 13.5, color: th.text, lineHeight: 1.4,
                   }}>
                     <span>{teamLabel(team1, m.players)}</span>
                     <span style={{ color: th.textFaint, fontWeight: 600, fontSize: 11.5, margin: '0 6px' }}>vs</span>
@@ -112,16 +111,15 @@ export function ResultsToConfirm({ token, clubSlug, onChanged }: {
                   </div>
                   <div style={{
                     fontFamily: th.fontMono, fontSize: 11, color: th.textMute, marginTop: 2,
-                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                    lineHeight: 1.5,
                   }}>
                     {metaParts.join(' · ')}
                   </div>
                 </div>
-
-                {m.competitive === false && <Chip tone="line">Pour le fun</Chip>}
               </div>
 
-              <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+              <div className="results-actions" style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8 }}>
+                {m.competitive === false && <Chip tone="line">Pour le fun</Chip>}
                 <button type="button" disabled={busy === m.matchId} onClick={() => confirm(m.matchId)} style={{
                   border: 'none', cursor: 'pointer', borderRadius: 99, padding: '8px 16px',
                   background: th.accent, color: th.onAccent, fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 700,

@@ -31,6 +31,7 @@ import { PaymentHistoryService } from '../services/paymentHistory.service';
 import { SSEService } from '../services/sse.service';
 import { iconService } from '../services/icon.service';
 import { matchCardService } from '../services/matchCard.service';
+import { assertRateLimit } from '../services/rateLimit';
 import { capacityFor } from '../utils/courtType';
 import { prisma } from '../db/prisma';
 
@@ -38,6 +39,12 @@ const router = Router();
 const clubService = new ClubService();
 const clubPageService = new ClubPageService();
 const availabilityService = new AvailabilityService();
+// Backstop anti-scraping/anti-flood sur la route publique la plus martelée (rush de
+// minuit). Généreux par design : CGNAT mobile (Orange/SFR/Bouygues/Free) peut faire
+// partager une même IP publique par des dizaines de joueurs distincts en simultané ;
+// la 2s de micro-cache (availabilityCache) protège déjà la base sur un hit.
+const AVAILABILITY_RATE_LIMIT_MAX = 240;
+const AVAILABILITY_RATE_LIMIT_WINDOW_SEC = 60;
 
 const PAGE_KINDS = new Set<ClubPageKind>(['CGV', 'MENTIONS_LEGALES', 'CONFIDENTIALITE', 'OFFRES']);
 const announcementService = new AnnouncementService();
@@ -187,6 +194,8 @@ router.get('/:slug/availability', async (req: Request, res: Response, next: Next
     const duration = parseInt(asString(req.query.duration), 10);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return void res.status(400).json({ error: 'date doit être YYYY-MM-DD' });
     if (isNaN(duration) || duration <= 0 || duration > 240) return void res.status(400).json({ error: 'duration invalide' });
+
+    await assertRateLimit('availability:get', req.ip || req.socket.remoteAddress || 'unknown', AVAILABILITY_RATE_LIMIT_MAX, AVAILABILITY_RATE_LIMIT_WINDOW_SEC);
 
     const clubSportId = req.query.clubSportId ? asString(req.query.clubSportId) : undefined;
     res.json(await availabilityService.getClubAvailabilityBySlug(asString(req.params.slug), date, duration, clubSportId));

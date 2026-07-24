@@ -28,6 +28,31 @@ export function winnerFromSets(sets: SetScore[]): 1 | 2 {
   return s1 >= s2 ? 1 : 2;
 }
 
+/**
+ * Libellé d'une équipe en prénoms : « Lucas & Jean ». En cas de prénom en double DANS LE
+ * MATCH (`allPlayers`), on ajoute l'initiale du nom pour lever l'ambiguïté : « Jean D. & Jean M. ».
+ * Réservé aux petits écrans / lignes concaténées où le prénom+nom complet des deux équipes
+ * ne tient pas sur une ligne.
+ */
+export function teamFirstNamesLabel(
+  team: { firstName: string; lastName: string }[],
+  allPlayers: { firstName: string; lastName: string }[],
+): string {
+  const counts = new Map<string, number>();
+  for (const p of allPlayers) {
+    const key = p.firstName.trim().toLowerCase();
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return team
+    .map((p) => {
+      const first = p.firstName.trim();
+      const last = p.lastName.trim();
+      const collides = (counts.get(first.toLowerCase()) ?? 0) > 1;
+      return collides && last ? `${first} ${last[0].toUpperCase()}.` : first;
+    })
+    .join(' & ');
+}
+
 export interface MatchPlayerLite {
   userId: string;
   team: number;

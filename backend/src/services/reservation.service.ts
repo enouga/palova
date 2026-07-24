@@ -18,6 +18,7 @@ import { RefundService } from './refund.service';
 import { RatingService } from './rating.service';
 import { MatchAlertService } from './matchAlert.service';
 import { HOLD_TTL_SECONDS } from './holdWindow';
+import { assertRateLimit } from './rateLimit';
 import { invalidateClubAvailability } from './availabilityCache';
 import { sportHasLevels } from './rating/level';
 import { effectiveTeams, applyTeams, assertRosterGender, type OpenMatchGenderValue } from './matchTeams';
@@ -35,6 +36,11 @@ interface HoldSlotParams {
 }
 
 const HOLD_EXPIRY_MS = HOLD_TTL_SECONDS * 1000;
+// Anti-abus (script qui martèle /hold) : généreux pour un joueur qui compare plusieurs
+// créneaux à la suite, bloque une boucle automatisée. N'affecte jamais la pointe légitime
+// à l'ouverture (chaque joueur ne compte que ses PROPRES appels).
+const HOLD_RATE_LIMIT_MAX = 20;
+const HOLD_RATE_LIMIT_WINDOW_SEC = 60;
 
 export class ReservationService {
   private refundService = new RefundService();
@@ -236,6 +242,8 @@ export class ReservationService {
   }
 
   async holdSlot({ resourceId, userId, startTime, endTime, partnerUserIds, visibility, targetLevelMin, targetLevelMax }: HoldSlotParams) {
+    await assertRateLimit('reservation:hold', userId, HOLD_RATE_LIMIT_MAX, HOLD_RATE_LIMIT_WINDOW_SEC);
+
     const lockKey = this.lockKey(resourceId, startTime);
 
     const acquired = await redis.set(lockKey, userId, 'EX', HOLD_TTL_SECONDS, 'NX');
