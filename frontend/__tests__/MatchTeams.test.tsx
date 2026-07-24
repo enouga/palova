@@ -159,4 +159,20 @@ describe('MatchTeams (mini-terrain)', () => {
     wrap(<MatchTeams players={players} capacity={4} editable onAddToTeam={jest.fn()} activeTarget={{ team: 2, slot: 1 }} />);
     expect(screen.getByRole('button', { name: /Ajouter un joueur à l'équipe 2/ })).toHaveAttribute('data-target', 'true');
   });
+
+  it('pseudo présent : remplace le nom dans la cellule, les aria-labels et la feuille d’actions', () => {
+    const pl: MatchPlayerData[] = [
+      { userId: 'a', firstName: 'Marc', lastName: 'A', pseudo: 'SmashMaster', isOrganizer: true, team: 1 },
+      { userId: 'b', firstName: 'Paul', lastName: 'B', team: 1 },
+    ];
+    // onSetTeams fourni : sans lui, la cellule de l'organisateur (a) n'a aucune action
+    // disponible (repAllowed/remAllowed sont faux pour l'organisateur) et ne serait pas
+    // un bouton du tout — cf. le test existant « la feuille de l'organisateur n'a ni
+    // Retirer ni Remplacer » qui passe déjà onSetTeams pour la même raison.
+    wrap(<MatchTeams players={pl} capacity={4} editable onSetTeams={jest.fn()} onReplace={jest.fn()} onRemove={jest.fn()} />);
+    expect(screen.getByText('SmashMaster')).toBeInTheDocument();
+    expect(screen.queryByText('Marc A')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Modifier SmashMaster' }));
+    expect(screen.getByRole('dialog', { name: 'Actions pour SmashMaster' })).toBeInTheDocument();
+  });
 });

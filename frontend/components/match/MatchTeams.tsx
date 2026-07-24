@@ -13,6 +13,8 @@ export interface MatchPlayerData {
   userId: string;
   firstName: string;
   lastName: string;
+  /** Pseudo optionnel — priorité d'affichage sur prénom/nom (parties ouvertes). */
+  pseudo?: string | null;
   avatarUrl?: string | null;
   isOrganizer?: boolean;
   participantId?: string;
@@ -97,7 +99,7 @@ export function MatchTeams({
     ? shortNamesById(players.map((p) => ({ id: p.userId, firstName: p.firstName, lastName: p.lastName })))
     : null;
   const fullName = (p: MatchPlayerData) => `${p.firstName} ${p.lastName}`;
-  const displayName = (p: MatchPlayerData) => shortNames?.[p.userId] ?? fullName(p);
+  const displayName = (p: MatchPlayerData) => p.pseudo ?? shortNames?.[p.userId] ?? fullName(p);
 
   // Position mémorisée par joueur (équipe + emplacement), stable sur la session.
   const posRef = useRef<Record<string, { team: 1 | 2; slot: number }>>({});
@@ -222,7 +224,7 @@ export function MatchTeams({
       if (!editable && onPlayerTap && p.userId !== viewerUserId) {
         return (
           <button type="button" data-player-slot={SLOT_LABELS[idx]} disabled={busy}
-            aria-label={`Écrire à ${fullName(p)}`} title="Envoyer un message"
+            aria-label={`Écrire à ${displayName(p)}`} title="Envoyer un message"
             onClick={() => onPlayerTap(p.userId)}
             style={{ ...cellStyle, cursor: busy ? 'default' : 'pointer', font: 'inherit' }}>
             {inner}
@@ -233,7 +235,7 @@ export function MatchTeams({
     }
     return (
       <button type="button" data-player-slot={SLOT_LABELS[idx]} disabled={busy}
-        aria-label={`Modifier ${fullName(p)}`} onClick={() => setSelectedId(p.userId)}
+        aria-label={`Modifier ${displayName(p)}`} onClick={() => setSelectedId(p.userId)}
         style={{ ...cellStyle, cursor: busy ? 'default' : 'pointer', font: 'inherit' }}>
         {inner}
       </button>
@@ -332,7 +334,7 @@ export function MatchTeams({
       {selected && (
         <PlayerActionSheet
           player={selected}
-          playerName={fullName(selected)}
+          playerName={displayName(selected)}
           slotLabel={showGD ? SLOT_LABELS[Math.max(0, layout[selected.team].findIndex((x) => x?.userId === selected.userId))] : undefined}
           teamColor={SIDE_COLOR[selected.team]}
           team={selected.team}
