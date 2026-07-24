@@ -7,7 +7,7 @@ import { ACCENTS } from '@/lib/theme';
 import { AgendaCard } from '@/components/agenda/AgendaCard';
 import { AgendaRail } from '@/components/agenda/AgendaRail';
 import { FacetPanel } from '@/components/calendar/FacetPanel';
-import { Icon } from '@/components/ui/Icon';
+import { FiltersToggle } from '@/components/ui/FiltersToggle';
 import { tournamentPlacesLabel } from '@/lib/clubhouse';
 import { setSpansMultipleSports } from '@/lib/sportBadge';
 import { fillRatio, formatDateTimeRange } from '@/lib/tournament';
@@ -227,39 +227,7 @@ export function TournamentFinder({
               pilule de /decouvrir). Un badge « Filtres · N » signale les filtres mémorisés,
               sinon on ne comprend pas pourquoi la liste est réduite alors qu'aucun filtre n'est
               visible ; « Effacer » vide sans avoir à déplier. */}
-          <div style={{ padding: '4px 20px 0', display: 'flex', alignItems: 'center', gap: 10 }}>
-            <button
-              type="button"
-              onClick={() => setFiltersOpen((o) => !o)}
-              aria-expanded={filtersOpen}
-              aria-controls="tournois-facets"
-              style={{
-                display: 'inline-flex', alignItems: 'center', gap: 8, border: 'none', cursor: 'pointer',
-                borderRadius: 999, padding: '8px 14px', background: th.bgElev,
-                boxShadow: `inset 0 0 0 1px ${th.line}`, fontFamily: th.fontUI, fontSize: 13.5,
-                fontWeight: 700, color: th.text, WebkitTapHighlightColor: 'transparent',
-              }}
-            >
-              <Icon name="settings" size={15} color={th.textMute} />
-              Filtres
-              {filterCount > 0 && (
-                <span aria-hidden="true" style={{
-                  minWidth: 18, height: 18, borderRadius: 999, padding: '0 5px', display: 'inline-flex',
-                  alignItems: 'center', justifyContent: 'center', background: th.accent, color: th.onAccent,
-                  fontSize: 11.5, fontWeight: 800, lineHeight: 1,
-                }}>{filterCount}</span>
-              )}
-              <span aria-hidden="true" style={{ display: 'inline-flex', transform: filtersOpen ? 'rotate(-90deg)' : 'rotate(90deg)', transition: 'transform .15s' }}>
-                <Icon name="chevR" size={13} color={th.textMute} />
-              </span>
-            </button>
-            {filterCount > 0 && (
-              <button type="button" onClick={clearFilters} style={{
-                border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: th.fontUI,
-                fontSize: 12.5, fontWeight: 600, color: th.textMute, padding: '4px 6px',
-              }}>Effacer</button>
-            )}
-          </div>
+          <FiltersToggle count={filterCount} open={filtersOpen} onToggle={() => setFiltersOpen((o) => !o)} onClear={clearFilters} controlsId="tournois-facets" />
           {filtersOpen && (
             <div id="tournois-facets">
               <FacetPanel
@@ -273,7 +241,6 @@ export function TournamentFinder({
                 onToggleNearMe={toggleNearMe}
                 onClear={clearFilters}
                 nearMeBusy={nearBusy}
-                resultCount={results ? results.length : null}
               />
             </div>
           )}
