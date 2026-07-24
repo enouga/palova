@@ -180,7 +180,7 @@ describe('TournamentFinder', () => {
     );
     await waitFor(() => expect(onCount).toHaveBeenLastCalledWith(8));
     expect(screen.getAllByText(/^Tournoi \d+$/)).toHaveLength(8);
-    expect(container.querySelector('.discover-tournaments-grid')).not.toBeNull();
+    expect(container.querySelector('.ag-rail')).not.toBeNull();
     expect(screen.getByText('8 tournois')).toBeInTheDocument();
 
     // La page autonome (pas de hideTitle) ne tronque rien.

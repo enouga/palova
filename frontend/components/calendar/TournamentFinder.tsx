@@ -5,10 +5,9 @@ import { api, NationalTournament, TournamentGender } from '@/lib/api';
 import { clubUrl } from '@/lib/clubUrl';
 import { ACCENTS } from '@/lib/theme';
 import { AgendaCard } from '@/components/agenda/AgendaCard';
+import { AgendaRail } from '@/components/agenda/AgendaRail';
 import { FacetPanel } from '@/components/calendar/FacetPanel';
 import { Icon } from '@/components/ui/Icon';
-import { useScrollRail } from '@/lib/useScrollRail';
-import { RailArrows } from '@/components/ui/RailArrows';
 import { tournamentPlacesLabel } from '@/lib/clubhouse';
 import { setSpansMultipleSports } from '@/lib/sportBadge';
 import { fillRatio, formatDateTimeRange } from '@/lib/tournament';
@@ -207,8 +206,6 @@ export function TournamentFinder({
   // Notifie la page hôte du nombre de résultats affichés (ex. compteur d'onglet).
   useEffect(() => { if (visibleResults) onCount?.(visibleResults.length); }, [visibleResults?.length, onCount]);
 
-  const { railRef, edges, scrollByPage } = useScrollRail([visibleResults?.length ?? 0]);
-
   const clearFilters = () => setState((s) => ({ ...emptyCalendarState(), nearMe: s.nearMe }));
   const filterCount = activeFilterCount(state);
   const hasActiveFilters = filterCount > 0;
@@ -302,44 +299,32 @@ export function TournamentFinder({
             </div>
           )}
           {visibleResults != null && visibleResults.length > 0 && (
-            <>
-              {/* grid-auto-columns en calc(50% - gap/2) — pas un px fixe : toujours 2
-                  vignettes pleinement visibles dans la largeur du conteneur, sur tout écran
-                  (mobile compris), la 3e colonne démarre juste après et se révèle au
-                  défilement (même traitement que Prochains events / Clubs). */}
-              {/* UNE ligne jusqu'à 4 tournois, 2 rangées au-delà (gridTemplateRows inline, dynamique). */}
-              <style>{`.discover-tournaments-grid{display:grid;grid-auto-flow:column;grid-auto-columns:calc(50% - 6px);gap:12px;align-items:start}
-              @media (max-width: 700px) { .discover-tournaments-grid{grid-template-rows:auto !important;grid-auto-columns:86%} }`}</style>
-              <div style={{ textAlign: 'right', fontFamily: th.fontUI, fontSize: 13, fontWeight: 700, color: th.text, marginBottom: 4 }}>
-                {visibleResults.length} tournoi{visibleResults.length > 1 ? 's' : ''}
-              </div>
-              <div style={{ position: 'relative', margin: '0 -20px' }}>
-                <div ref={railRef} className="sp-scroll-x discover-tournaments-grid" style={{ gridTemplateRows: `repeat(${visibleResults.length <= 4 ? 1 : 2}, auto)`, padding: '4px 20px 8px', scrollSnapType: 'x proximity', scrollPaddingLeft: 20 }}>
-                  {visibleResults.map(({ tournament: t, distanceKm }) => {
-                    const subtitle = [t.club.name, t.club.city, distanceKm != null ? `${Math.round(distanceKm)} km` : null].filter(Boolean).join(' · ');
-                    return (
-                      <AgendaCard
-                        key={t.id}
-                        icon="trophy"
-                        accent={ACCENTS.apricot}
-                        tag={`${t.category} · ${GENDER_LABEL[t.gender]}`}
-                        title={t.name}
-                        subtitle={subtitle}
-                        dateLabel={formatDateTimeRange(t.startTime, t.endTime, t.club.timezone)}
-                        deadline={t.registrationDeadline}
-                        now={now}
-                        ratio={fillRatio(t)}
-                        places={tournamentPlacesLabel(t)}
-                        price={t.entryFee ? `${t.entryFee} €` : null}
-                        sportLabel={showSport ? (t.sport?.name ?? null) : null}
-                        onClick={() => { window.location.href = clubUrl(t.club.slug, `/tournois/${t.id}`); }}
-                      />
-                    );
-                  })}
-                </div>
-                <RailArrows edges={edges} onPrev={() => scrollByPage(-1)} onNext={() => scrollByPage(1)} prevLabel="Tournois précédents" nextLabel="Tournois suivants" fadeBottom={8} />
-              </div>
-            </>
+            <AgendaRail
+              countLabel={`${visibleResults.length} tournoi${visibleResults.length > 1 ? 's' : ''}`}
+              prevLabel="Tournois précédents" nextLabel="Tournois suivants"
+            >
+              {visibleResults.map(({ tournament: t, distanceKm }) => {
+                const subtitle = [t.club.name, t.club.city, distanceKm != null ? `${Math.round(distanceKm)} km` : null].filter(Boolean).join(' · ');
+                return (
+                  <AgendaCard
+                    key={t.id}
+                    icon="trophy"
+                    accent={ACCENTS.apricot}
+                    tag={`${t.category} · ${GENDER_LABEL[t.gender]}`}
+                    title={t.name}
+                    subtitle={subtitle}
+                    dateLabel={formatDateTimeRange(t.startTime, t.endTime, t.club.timezone)}
+                    deadline={t.registrationDeadline}
+                    now={now}
+                    ratio={fillRatio(t)}
+                    places={tournamentPlacesLabel(t)}
+                    price={t.entryFee ? `${t.entryFee} €` : null}
+                    sportLabel={showSport ? (t.sport?.name ?? null) : null}
+                    onClick={() => { window.location.href = clubUrl(t.club.slug, `/tournois/${t.id}`); }}
+                  />
+                );
+              })}
+            </AgendaRail>
           )}
         </div>
       ) : (
