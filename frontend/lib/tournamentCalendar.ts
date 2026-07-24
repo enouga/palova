@@ -18,6 +18,9 @@ export const DATE_PRESETS: { key: DatePreset; label: string }[] = [
   { key: 'thisMonth', label: 'Ce mois-ci' },
 ];
 
+/** Clés de preset valides — source unique pour valider une valeur venue de l'URL ou du stockage. */
+export const DATE_PRESET_KEYS: DatePreset[] = DATE_PRESETS.map((p) => p.key);
+
 export interface CalendarFilterState {
   deptCodes: Set<string>;
   categories: Set<string>;
@@ -30,6 +33,49 @@ export interface CalendarFilterState {
 
 export function emptyCalendarState(): CalendarFilterState {
   return { deptCodes: new Set(), categories: new Set(), genders: new Set(), datePreset: null, from: null, to: null, nearMe: false };
+}
+
+// ── Comptage + mémoire de session ─────────────────────────────────────────────
+/** Nombre de filtres ACTIFS (pour le badge « Filtres · N »). `nearMe` est un TRI, pas un
+ *  filtre (même exclusion que `hasActive` du FacetPanel), donc jamais compté ; une plage
+ *  from/to compte pour 1, pas 2. */
+export function activeFilterCount(s: CalendarFilterState): number {
+  return s.deptCodes.size + s.categories.size + s.genders.size + (s.datePreset || s.from || s.to ? 1 : 0);
+}
+
+/** Clé localStorage des filtres tournois de /decouvrir (mémoire d'une session à l'autre). */
+export const DISCOVER_TOURNOIS_FILTERS_KEY = 'palova:discover-tournois-filters';
+
+/** Forme JSON-sérialisable de `CalendarFilterState` — `nearMe` volontairement absent (géoloc
+ *  jamais rejouée au chargement) et les `Set` aplatis en tableaux. */
+export interface StoredCalendarState {
+  quand: DatePreset | null;
+  from: string | null;
+  to: string | null;
+  dept: string[];
+  cat: string[];
+  genre: TournamentGender[];
+}
+
+export function calendarStateToStored(s: CalendarFilterState): StoredCalendarState {
+  return { quand: s.datePreset, from: s.from, to: s.to, dept: [...s.deptCodes], cat: [...s.categories], genre: [...s.genders] };
+}
+
+const GENDER_VALUES: TournamentGender[] = ['MEN', 'WOMEN', 'MIXED'];
+
+/** Réhydrate un état depuis le stockage — tolérant à toute entrée corrompue (null, mauvais type,
+ *  clés inconnues filtrées). `nearMe` toujours false. */
+export function storedToCalendarState(raw: unknown): CalendarFilterState {
+  const s = emptyCalendarState();
+  if (!raw || typeof raw !== 'object') return s;
+  const o = raw as Record<string, unknown>;
+  if (typeof o.quand === 'string' && (DATE_PRESET_KEYS as string[]).includes(o.quand)) s.datePreset = o.quand as DatePreset;
+  if (typeof o.from === 'string') s.from = o.from;
+  if (typeof o.to === 'string') s.to = o.to;
+  if (Array.isArray(o.dept)) s.deptCodes = new Set(o.dept.filter((x): x is string => typeof x === 'string'));
+  if (Array.isArray(o.cat)) s.categories = new Set(o.cat.filter((x): x is string => typeof x === 'string'));
+  if (Array.isArray(o.genre)) s.genders = new Set(o.genre.filter((x): x is TournamentGender => (GENDER_VALUES as string[]).includes(x as string)));
+  return s;
 }
 
 // P25→P2000 : ordre canonique des catégories, réutilisé depuis lib/events.ts (source unique).

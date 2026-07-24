@@ -27,20 +27,61 @@ describe('TournamentFinder', () => {
   // breaks the "Autour de moi" sorting assertion.
   beforeEach(() => {
     window.history.replaceState(null, '', '/');
+    localStorage.clear(); // les filtres persistent en localStorage → sinon fuite entre tests
     (api.listNationalTournaments as jest.Mock).mockClear();
   });
+
+  // Le panneau de facettes est replié par défaut ; l'ouvrir avant de toucher une puce.
+  const openFilters = () => fireEvent.click(screen.getByRole('button', { name: /^Filtres/ }));
+
   it('charge et liste les tournois nationaux', async () => {
     render(<ThemeProvider><TournamentFinder /></ThemeProvider>);
     expect(await screen.findByText('GP Paris')).toBeInTheDocument();
     expect(screen.getByText('Open Lyon')).toBeInTheDocument();
   });
 
+  it('le panneau de facettes est replié par défaut ; « Filtres » le déplie', async () => {
+    render(<ThemeProvider><TournamentFinder /></ThemeProvider>);
+    await screen.findByText('GP Paris');
+    expect(screen.queryByRole('button', { name: 'Paris' })).not.toBeInTheDocument(); // fermé
+    openFilters();
+    expect(screen.getByRole('button', { name: 'Paris' })).toBeInTheDocument(); // déplié
+  });
+
   it('filtrer par département 75 ne garde que Paris', async () => {
     render(<ThemeProvider><TournamentFinder /></ThemeProvider>);
     await screen.findByText('GP Paris');
+    openFilters();
     fireEvent.click(screen.getByRole('button', { name: 'Paris' })); // chip département (compteur en aria-hidden)
     await waitFor(() => expect(screen.queryByText('Open Lyon')).not.toBeInTheDocument());
     expect(screen.getByText('GP Paris')).toBeInTheDocument();
+  });
+
+  it('badge « Filtres · N » + « Effacer » vide les filtres sans déplier', async () => {
+    render(<ThemeProvider><TournamentFinder /></ThemeProvider>);
+    await screen.findByText('GP Paris');
+    openFilters();
+    fireEvent.click(screen.getByRole('button', { name: 'Paris' }));
+    await waitFor(() => expect(screen.queryByText('Open Lyon')).not.toBeInTheDocument());
+    // le badge affiche « 1 » (aria-hidden → lisible via textContent, pas via le nom accessible)
+    expect(screen.getByRole('button', { name: /^Filtres/ }).textContent).toContain('1');
+    fireEvent.click(screen.getByRole('button', { name: 'Effacer' }));
+    expect(await screen.findByText('Open Lyon')).toBeInTheDocument();
+  });
+
+  it('les filtres sont mémorisés entre montages (URL propre → restaurés depuis localStorage)', async () => {
+    const first = render(<ThemeProvider><TournamentFinder /></ThemeProvider>);
+    await screen.findByText('GP Paris');
+    openFilters();
+    fireEvent.click(screen.getByRole('button', { name: 'Paris' }));
+    await waitFor(() => expect(screen.queryByText('Open Lyon')).not.toBeInTheDocument());
+    first.unmount();
+    window.history.replaceState(null, '', '/'); // URL propre : seul le localStorage peut restaurer
+
+    render(<ThemeProvider><TournamentFinder /></ThemeProvider>);
+    await screen.findByText('GP Paris');
+    expect(screen.queryByText('Open Lyon')).not.toBeInTheDocument(); // filtre dept=75 restauré, panneau fermé
+    expect(screen.getByRole('button', { name: /^Filtres/ }).textContent).toContain('1');
   });
 
   it('« Autour de moi » via géoloc trie par distance (Lyon en premier)', async () => {
@@ -48,6 +89,7 @@ describe('TournamentFinder', () => {
       ok({ coords: { latitude: 45.76, longitude: 4.83 } } as GeolocationPosition);
     render(<ThemeProvider><TournamentFinder /></ThemeProvider>);
     await screen.findByText('GP Paris');
+    openFilters();
     fireEvent.click(screen.getByRole('button', { name: /Autour de moi/i }));
     await waitFor(() => {
       const titles = screen.getAllByText(/GP Paris|Open Lyon/).map((n) => n.textContent);
@@ -59,6 +101,7 @@ describe('TournamentFinder', () => {
     window.history.replaceState(null, '', '/decouvrir?tab=tournois');
     render(<ThemeProvider><TournamentFinder /></ThemeProvider>);
     await screen.findByText('GP Paris');
+    openFilters();
     fireEvent.click(screen.getByRole('button', { name: 'Paris' })); // chip département (compteur en aria-hidden)
     await waitFor(() => expect(window.location.search).toContain('dept=75'));
     expect(window.location.search).toContain('tab=tournois');
@@ -74,6 +117,7 @@ describe('TournamentFinder', () => {
       expect(titles[0]).toBe('Open Lyon');
     });
     expect(getCurrentPosition).not.toHaveBeenCalled();
+    openFilters();
     expect(screen.getByRole('button', { name: /Autour de moi/i })).toHaveAttribute('aria-pressed', 'true');
   });
 
@@ -81,6 +125,7 @@ describe('TournamentFinder', () => {
     render(<ThemeProvider><TournamentFinder city="lyon" /></ThemeProvider>);
     await screen.findByText('Open Lyon');
     expect(screen.queryByText('GP Paris')).not.toBeInTheDocument();
+    openFilters();
     expect(screen.queryByRole('button', { name: 'Paris' })).not.toBeInTheDocument();
   });
 
@@ -113,6 +158,7 @@ describe('TournamentFinder', () => {
     window.history.replaceState(null, '', '/decouvrir#tournois');
     render(<ThemeProvider><TournamentFinder items={NAT} /></ThemeProvider>);
     await screen.findByText('GP Paris');
+    openFilters();
     fireEvent.click(screen.getByRole('button', { name: 'Paris' }));
     await waitFor(() => expect(window.location.search).toContain('dept=75'));
     expect(window.location.hash).toBe('#tournois');

@@ -6,7 +6,7 @@ import { useAuth } from '@/lib/useAuth';
 import { useTheme } from '@/lib/ThemeProvider';
 import { hardNavigate } from '@/lib/nav';
 import { platformUrl } from '@/lib/clubUrl';
-import { parseLocationQuery } from '@/lib/discover';
+import { parseLocationQuery, DISCOVER_LOCATION_KEY } from '@/lib/discover';
 import { Screen } from '@/components/ui/Screen';
 import { Logotype, ThemeToggle, BackButton } from '@/components/ui/atoms';
 import { ProfileMenu } from '@/components/ProfileMenu';
@@ -101,15 +101,27 @@ export function DiscoverClient() {
   );
 
   // Deep-links posés par le hero de la vitrine : ?q= préremplit la recherche, ?pres=1 lance la
-  // géoloc à l'arrivée. Lus une fois au montage (même idiome que le hash plus bas).
+  // géoloc à l'arrivée. Lus une fois au montage (même idiome que le hash plus bas). À défaut de
+  // ?q=, on restaure la dernière recherche par lieu mémorisée (localStorage) — la géoloc, elle,
+  // n'est jamais rejouée automatiquement.
   useEffect(() => {
     if (slug) return;
     const params = new URLSearchParams(window.location.search);
     const q = params.get('q');
     if (q) setLocInput(q);
+    else { try { const saved = localStorage.getItem(DISCOVER_LOCATION_KEY); if (saved) setLocInput(saved); } catch { /* stockage indispo */ } }
     if (params.get('pres') === '1') locateMe();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug]);
+
+  // Mémorise le texte de recherche par lieu d'une session à l'autre (le montage est sauté pour
+  // ne pas écraser la valeur restaurée avant sa relecture).
+  const wroteLocOnce = useRef(false);
+  useEffect(() => {
+    if (slug) return;
+    if (!wroteLocOnce.current) { wroteLocOnce.current = true; return; }
+    try { localStorage.setItem(DISCOVER_LOCATION_KEY, locInput); } catch { /* stockage indispo */ }
+  }, [slug, locInput]);
 
   useEffect(() => {
     if (slug) return;

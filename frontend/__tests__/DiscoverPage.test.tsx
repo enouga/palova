@@ -115,6 +115,7 @@ beforeEach(() => {
   clubCtx = { slug: null, club: null, loading: false };
   authToken = null;
   window.history.replaceState(null, '', '/decouvrir');
+  localStorage.clear(); // la recherche par lieu + les filtres tournois persistent en localStorage → sinon fuite entre tests
   listNationalOpenMatches.mockResolvedValue([MATCH_PARIS, MATCH_LYON]);
   listNationalTournaments.mockResolvedValue([]);
   getSports.mockResolvedValue([]);

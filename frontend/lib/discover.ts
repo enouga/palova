@@ -22,6 +22,10 @@ export interface DiscoverMatchFilter {
 /** Requête de localisation parsée : ville OU codes département (exclusifs). */
 export interface LocationQuery { city: string | null; deptCodes: string[] }
 
+/** Clé localStorage du texte de recherche par lieu de /decouvrir (ville / CP / département) —
+ *  mémorisé d'une session à l'autre ; la géoloc « Autour de moi » n'est jamais rejouée. */
+export const DISCOVER_LOCATION_KEY = 'palova:discover-location';
+
 /** « Ville, code postal ou département » : un CP est réduit à son département (97x → 3 chiffres,
  *  Corse 20xxx → 2A+2B) ; un code 2-3 chiffres passe tel quel ; sinon recherche par nom. */
 export function parseLocationQuery(q: string): LocationQuery {

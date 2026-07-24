@@ -1,5 +1,6 @@
 import {
   emptyCalendarState, resolveDateWindow, applyFilters, calendarFacets, distanceKm, rangeChipLabel,
+  activeFilterCount, calendarStateToStored, storedToCalendarState,
   CalendarFilterState,
 } from '@/lib/tournamentCalendar';
 import { NationalTournament } from '@/lib/api';
@@ -98,6 +99,55 @@ describe('distanceKm', () => {
     const d = distanceKm({ lat: 48.8566, lng: 2.3522 }, { lat: 45.764, lng: 4.8357 });
     expect(d).toBeGreaterThan(370);
     expect(d).toBeLessThan(410);
+  });
+});
+
+describe('activeFilterCount', () => {
+  it('compte départements + catégories + genres + (1 si date active), jamais nearMe', () => {
+    expect(activeFilterCount(emptyCalendarState())).toBe(0);
+    const st: CalendarFilterState = {
+      ...emptyCalendarState(),
+      deptCodes: new Set(['75', '69']),
+      categories: new Set(['P500']),
+      genders: new Set(['MEN']),
+      datePreset: 'thisMonth',
+    };
+    expect(activeFilterCount(st)).toBe(5); // 2 dept + 1 cat + 1 genre + 1 date
+  });
+  it('une plage from/to compte pour 1 (pas 2), nearMe ignoré', () => {
+    const st: CalendarFilterState = { ...emptyCalendarState(), from: '2026-07-24', to: '2026-08-02', nearMe: true };
+    expect(activeFilterCount(st)).toBe(1);
+  });
+});
+
+describe('calendarStateToStored / storedToCalendarState', () => {
+  it('aller-retour préserve dimensions filtrantes, jamais nearMe', () => {
+    const st: CalendarFilterState = {
+      ...emptyCalendarState(),
+      deptCodes: new Set(['75', '69']),
+      categories: new Set(['P500', 'P1000']),
+      genders: new Set(['MEN', 'MIXED']),
+      datePreset: 'thisMonth',
+      nearMe: true, // ne doit PAS ressortir
+    };
+    const back = storedToCalendarState(calendarStateToStored(st));
+    expect([...back.deptCodes].sort()).toEqual(['69', '75']);
+    expect([...back.categories].sort()).toEqual(['P1000', 'P500']);
+    expect([...back.genders].sort()).toEqual(['MEN', 'MIXED']);
+    expect(back.datePreset).toBe('thisMonth');
+    expect(back.nearMe).toBe(false);
+  });
+  it('plage from/to conservée', () => {
+    const st: CalendarFilterState = { ...emptyCalendarState(), from: '2026-07-24', to: '2026-08-02' };
+    const back = storedToCalendarState(calendarStateToStored(st));
+    expect(back.from).toBe('2026-07-24');
+    expect(back.to).toBe('2026-08-02');
+    expect(back.datePreset).toBeNull();
+  });
+  it('entrée corrompue → état vide (tolérant)', () => {
+    expect(activeFilterCount(storedToCalendarState(null))).toBe(0);
+    expect(activeFilterCount(storedToCalendarState('nope'))).toBe(0);
+    expect(activeFilterCount(storedToCalendarState({ quand: 'bidon', dept: 'x', genre: ['ZZ'] }))).toBe(0);
   });
 });
 

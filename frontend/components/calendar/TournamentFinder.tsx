@@ -6,6 +6,7 @@ import { clubUrl } from '@/lib/clubUrl';
 import { ACCENTS } from '@/lib/theme';
 import { AgendaCard } from '@/components/agenda/AgendaCard';
 import { FacetPanel } from '@/components/calendar/FacetPanel';
+import { Icon } from '@/components/ui/Icon';
 import { useScrollRail } from '@/lib/useScrollRail';
 import { RailArrows } from '@/components/ui/RailArrows';
 import { tournamentPlacesLabel } from '@/lib/clubhouse';
@@ -14,6 +15,8 @@ import { fillRatio, formatDateTimeRange } from '@/lib/tournament';
 import { norm } from '@/lib/members';
 import {
   CalendarFilterState, DatePreset, emptyCalendarState, applyFilters, calendarFacets,
+  DATE_PRESET_KEYS, activeFilterCount, calendarStateToStored, storedToCalendarState,
+  DISCOVER_TOURNOIS_FILTERS_KEY,
 } from '@/lib/tournamentCalendar';
 
 const GENDER_LABEL: Record<string, string> = { MEN: 'Messieurs', WOMEN: 'Dames', MIXED: 'Mixte' };
@@ -55,6 +58,10 @@ export function TournamentFinder({
   const [fetched, setFetched] = useState<NationalTournament[] | null>(null);
   const selfFetch = preloaded === undefined;
   const [state, setState] = useState<CalendarFilterState>(emptyCalendarState());
+  // Panneau de facettes replié par défaut (mémoire de session = badge « Filtres · N », pas
+  // l'ouverture) : sur /decouvrir la barre de localisation en haut couvre déjà le lieu, le
+  // reste (Quand/Catégorie/Genre) tient derrière ce bouton pour ne pas manger l'écran.
+  const [filtersOpen, setFiltersOpen] = useState(false);
   // coords stored in a ref (not state) so that setting coords and nearMe=true
   // happen in a single state update, avoiding ordering races in the test environment.
   const coordsRef = useRef<{ lat: number; lng: number } | null>(null);
@@ -77,21 +84,31 @@ export function TournamentFinder({
     return () => { clearTimeout(t); clearInterval(h); };
   }, []);
 
-  // Lecture initiale de l'URL : ?quand=&du=&au=&dept=&cat=&genre=&near=
+  // État initial : l'URL prime (lien partageable ?quand=&du=&au=&dept=&cat=&genre=&near=),
+  // sinon repli sur la mémoire de session (localStorage) — la géoloc n'est jamais rejouée
+  // (nearMe absent du stockage). Aucun des deux → état vide.
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
-    const split = (k: string) => (q.get(k) ? q.get(k)!.split(',').filter(Boolean) : []);
-    const preset = q.get('quand') as DatePreset | null;
-    setState((s) => ({
-      ...s,
-      datePreset: (['weekend', 'thisMonth', 'days30', 'months3'] as string[]).includes(preset ?? '') ? preset : null,
-      from: q.get('du') || null,
-      to: q.get('au') || null,
-      deptCodes: new Set(split('dept')),
-      categories: new Set(split('cat')),
-      genders: new Set(split('genre') as TournamentGender[]),
-      nearMe: q.get('near') === '1',
-    }));
+    const hasUrlFilters = OWN_URL_KEYS.some((k) => q.get(k) != null);
+    if (hasUrlFilters) {
+      const split = (k: string) => (q.get(k) ? q.get(k)!.split(',').filter(Boolean) : []);
+      const preset = q.get('quand');
+      setState((s) => ({
+        ...s,
+        datePreset: (DATE_PRESET_KEYS as string[]).includes(preset ?? '') ? (preset as DatePreset) : null,
+        from: q.get('du') || null,
+        to: q.get('au') || null,
+        deptCodes: new Set(split('dept')),
+        categories: new Set(split('cat')),
+        genders: new Set(split('genre') as TournamentGender[]),
+        nearMe: q.get('near') === '1',
+      }));
+    } else {
+      try {
+        const raw = localStorage.getItem(DISCOVER_TOURNOIS_FILTERS_KEY);
+        if (raw) setState((s) => ({ ...storedToCalendarState(JSON.parse(raw)), nearMe: s.nearMe }));
+      } catch { /* stockage indisponible (mode privé/quota) : on reste sur l'état vide */ }
+    }
     urlReady.current = true;
   }, []);
 
@@ -111,6 +128,8 @@ export function TournamentFinder({
     if (state.nearMe) q.set('near', '1');
     const qs = q.toString();
     window.history.replaceState(null, '', (qs ? `?${qs}` : window.location.pathname) + window.location.hash);
+    // Miroir en mémoire de session (nearMe exclu par calendarStateToStored).
+    try { localStorage.setItem(DISCOVER_TOURNOIS_FILTERS_KEY, JSON.stringify(calendarStateToStored(state))); } catch { /* stockage indisponible */ }
   }, [state]);
 
   // Coordonnées fournies par la page hôte (barre de localisation partagée) : seed le ref puis
@@ -191,7 +210,8 @@ export function TournamentFinder({
   const { railRef, edges, scrollByPage } = useScrollRail([visibleResults?.length ?? 0]);
 
   const clearFilters = () => setState((s) => ({ ...emptyCalendarState(), nearMe: s.nearMe }));
-  const hasActiveFilters = state.deptCodes.size > 0 || state.categories.size > 0 || state.genders.size > 0 || state.datePreset != null || !!state.from || !!state.to;
+  const filterCount = activeFilterCount(state);
+  const hasActiveFilters = filterCount > 0;
 
   return (
     // Le 100vh ne vaut que pour la page /tournois autonome — embarquée dans /decouvrir
@@ -205,19 +225,62 @@ export function TournamentFinder({
       )}
 
       {facets && (
-        <FacetPanel
-          facets={facets}
-          state={state}
-          onToggleDept={(c) => toggleIn('deptCodes', c)}
-          onToggleCategory={(c) => toggleIn('categories', c)}
-          onToggleGender={(g) => toggleIn('genders', g)}
-          onSetPreset={(p) => setState((s) => ({ ...s, datePreset: p, from: null, to: null }))}
-          onSetRange={(from, to) => setState((s) => ({ ...s, from, to, datePreset: null }))}
-          onToggleNearMe={toggleNearMe}
-          onClear={clearFilters}
-          nearMeBusy={nearBusy}
-          resultCount={results ? results.length : null}
-        />
+        <>
+          {/* Barre repliable : le panneau de facettes est fermé par défaut (le lieu vit dans la
+              pilule de /decouvrir). Un badge « Filtres · N » signale les filtres mémorisés,
+              sinon on ne comprend pas pourquoi la liste est réduite alors qu'aucun filtre n'est
+              visible ; « Effacer » vide sans avoir à déplier. */}
+          <div style={{ padding: '4px 20px 0', display: 'flex', alignItems: 'center', gap: 10 }}>
+            <button
+              type="button"
+              onClick={() => setFiltersOpen((o) => !o)}
+              aria-expanded={filtersOpen}
+              aria-controls="tournois-facets"
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 8, border: 'none', cursor: 'pointer',
+                borderRadius: 999, padding: '8px 14px', background: th.bgElev,
+                boxShadow: `inset 0 0 0 1px ${th.line}`, fontFamily: th.fontUI, fontSize: 13.5,
+                fontWeight: 700, color: th.text, WebkitTapHighlightColor: 'transparent',
+              }}
+            >
+              <Icon name="settings" size={15} color={th.textMute} />
+              Filtres
+              {filterCount > 0 && (
+                <span aria-hidden="true" style={{
+                  minWidth: 18, height: 18, borderRadius: 999, padding: '0 5px', display: 'inline-flex',
+                  alignItems: 'center', justifyContent: 'center', background: th.accent, color: th.onAccent,
+                  fontSize: 11.5, fontWeight: 800, lineHeight: 1,
+                }}>{filterCount}</span>
+              )}
+              <span aria-hidden="true" style={{ display: 'inline-flex', transform: filtersOpen ? 'rotate(-90deg)' : 'rotate(90deg)', transition: 'transform .15s' }}>
+                <Icon name="chevR" size={13} color={th.textMute} />
+              </span>
+            </button>
+            {filterCount > 0 && (
+              <button type="button" onClick={clearFilters} style={{
+                border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: th.fontUI,
+                fontSize: 12.5, fontWeight: 600, color: th.textMute, padding: '4px 6px',
+              }}>Effacer</button>
+            )}
+          </div>
+          {filtersOpen && (
+            <div id="tournois-facets">
+              <FacetPanel
+                facets={facets}
+                state={state}
+                onToggleDept={(c) => toggleIn('deptCodes', c)}
+                onToggleCategory={(c) => toggleIn('categories', c)}
+                onToggleGender={(g) => toggleIn('genders', g)}
+                onSetPreset={(p) => setState((s) => ({ ...s, datePreset: p, from: null, to: null }))}
+                onSetRange={(from, to) => setState((s) => ({ ...s, from, to, datePreset: null }))}
+                onToggleNearMe={toggleNearMe}
+                onClear={clearFilters}
+                nearMeBusy={nearBusy}
+                resultCount={results ? results.length : null}
+              />
+            </div>
+          )}
+        </>
       )}
 
       {hideTitle ? (
