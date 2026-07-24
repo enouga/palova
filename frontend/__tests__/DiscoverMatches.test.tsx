@@ -56,9 +56,13 @@ const wrap = (props: Partial<React.ComponentProps<typeof DiscoverMatches>> = {})
     </ThemeProvider>,
   );
 
+// Le tiroir de facettes est replié par défaut ; l'ouvrir avant de toucher une puce.
+const openFilters = () => fireEvent.click(screen.getByRole('button', { name: /^Filtres/ }));
+
 beforeEach(() => {
   jest.clearAllMocks();
   authToken = null;
+  localStorage.clear(); // les filtres persistent en localStorage → sinon fuite entre tests
   getMyRating.mockResolvedValue(null);
 });
 
@@ -70,8 +74,11 @@ describe('DiscoverMatches', () => {
     expect(screen.getAllByRole('link')).toHaveLength(2);
   });
 
-  it('les filtres vivent dans le tiroir compact (groupe Quand labellisé)', () => {
+  it('le tiroir de facettes est replié par défaut ; « Filtres » le déplie', () => {
     wrap();
+    expect(screen.queryByText('Quand')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: "Aujourd'hui" })).not.toBeInTheDocument();
+    openFilters();
     expect(screen.getByText('Quand')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: "Aujourd'hui" })).toBeInTheDocument();
   });
@@ -84,6 +91,7 @@ describe('DiscoverMatches', () => {
       ],
     });
     expect(screen.getAllByRole('link')).toHaveLength(2);
+    openFilters();
     fireEvent.click(screen.getByRole('button', { name: 'Pour le fun' }));
     expect(screen.getAllByRole('link')).toHaveLength(1);
     expect(screen.getByText('Fun Club')).toBeInTheDocument();
@@ -97,24 +105,27 @@ describe('DiscoverMatches', () => {
       ],
     });
     expect(screen.getAllByRole('link')).toHaveLength(2);
+    openFilters();
     fireEvent.click(screen.getByRole('button', { name: 'Féminine' }));
     expect(screen.getAllByRole('link')).toHaveLength(1);
     expect(screen.queryByText('Mixte Club')).not.toBeInTheDocument();
   });
 
-  it('« Effacer les filtres » réapparaît sur un filtre actif et le réinitialise', () => {
+  it('badge « Filtres · N » + « Effacer » réapparaît sur un filtre actif et le réinitialise', () => {
     wrap({
       matches: [
         makeMatch({ id: 'c', competitive: true }),
         makeMatch({ id: 'f', competitive: false, club: { ...makeMatch().club, name: 'Fun Club' } }),
       ],
     });
-    expect(screen.queryByRole('button', { name: /Effacer les filtres/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Effacer' })).not.toBeInTheDocument();
+    openFilters();
     fireEvent.click(screen.getByRole('button', { name: 'Pour le fun' }));
     expect(screen.getAllByRole('link')).toHaveLength(1);
-    fireEvent.click(screen.getByRole('button', { name: /Effacer les filtres/ }));
+    expect(screen.getByRole('button', { name: /^Filtres/ }).textContent).toContain('1');
+    fireEvent.click(screen.getByRole('button', { name: 'Effacer' }));
     expect(screen.getAllByRole('link')).toHaveLength(2);
-    expect(screen.queryByRole('button', { name: /Effacer les filtres/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Effacer' })).not.toBeInTheDocument();
   });
 
   it('chip Aujourd\'hui filtre les parties hors de la journée', () => {
@@ -126,6 +137,7 @@ describe('DiscoverMatches', () => {
       ],
     });
     expect(screen.getAllByRole('link')).toHaveLength(2);
+    openFilters();
     fireEvent.click(screen.getByRole('button', { name: 'Aujourd\'hui' }));
     expect(screen.getAllByRole('link')).toHaveLength(1);
     expect(screen.queryByText('Club plus tard')).not.toBeInTheDocument();
@@ -195,6 +207,7 @@ describe('DiscoverMatches', () => {
   it('anonyme : pas de chip « À mon niveau » et getMyRating jamais appelé', () => {
     authToken = null;
     wrap();
+    openFilters();
     expect(screen.queryByRole('button', { name: 'À mon niveau' })).not.toBeInTheDocument();
     expect(getMyRating).not.toHaveBeenCalled();
   });
@@ -211,6 +224,7 @@ describe('DiscoverMatches', () => {
     });
 
     await waitFor(() => expect(getMyRating).toHaveBeenCalledWith('tok', 'padel'));
+    openFilters();
     const levelChip = await screen.findByRole('button', { name: 'À mon niveau' });
 
     // Avant le clic : les 3 parties sont visibles.
@@ -254,5 +268,21 @@ describe('DiscoverMatches', () => {
   it('now null → Chargement…', () => {
     wrap({ now: null });
     expect(screen.getByText('Chargement…')).toBeInTheDocument();
+  });
+
+  it('les filtres sont mémorisés entre montages (restaurés depuis localStorage, tiroir replié)', async () => {
+    const twoMatches = () => [
+      makeMatch({ id: 'c', competitive: true }),
+      makeMatch({ id: 'f', competitive: false, club: { ...makeMatch().club, name: 'Fun Club' } }),
+    ];
+    const first = wrap({ matches: twoMatches() });
+    openFilters();
+    fireEvent.click(screen.getByRole('button', { name: 'Pour le fun' }));
+    expect(screen.getAllByRole('link')).toHaveLength(1);
+    first.unmount();
+
+    wrap({ matches: twoMatches() });
+    await waitFor(() => expect(screen.getAllByRole('link')).toHaveLength(1)); // filtre restauré, tiroir fermé
+    expect(screen.getByRole('button', { name: /^Filtres/ }).textContent).toContain('1');
   });
 });
