@@ -116,8 +116,6 @@ export function ClubDirectory({ city: cityProp, coords: coordsProp, deptCodes, o
 
   useEffect(() => { const t = setTimeout(load, 200); return () => clearTimeout(t); }, [load]);
 
-  const inputStyle = { flex: 1, minWidth: 0, height: 46, padding: '0 14px', borderRadius: 12, background: th.surface, color: th.text, border: 'none', boxShadow: `inset 0 0 0 1.5px ${th.line}`, fontFamily: th.fontUI, fontSize: 15 } as const;
-
   // Filtres propres à l'annuaire (la localisation en mode contrôlé vient de la barre partagée,
   // réinitialisée à part) : nom + sport, plus ville/géoloc en mode autonome (/clubs).
   const clubFiltersActive = !!q || !!sport || (!controlled && (!!cityInput || !!coordsInput));
@@ -134,7 +132,7 @@ export function ClubDirectory({ city: cityProp, coords: coordsProp, deptCodes, o
           <FiltersToggle count={clubsFilterCount} open={filtersOpen} onToggle={() => setFiltersOpen((o) => !o)} onClear={resetClubFilters} controlsId="clubs-facets" />
           {filtersOpen && (
             <div id="clubs-facets" style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '4px 20px 0', width: '100%' }}>
-              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Nom du club" style={inputStyle} />
+              <SearchField icon="search" value={q} onChange={setQ} placeholder="Nom du club" />
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
                 <button onClick={() => setSport('')} style={chipBtn(th, sport === '')}>Tous</button>
                 {sports.map((s) => (
@@ -149,8 +147,8 @@ export function ClubDirectory({ city: cityProp, coords: coordsProp, deptCodes, o
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '18px 20px 0' }}>
           <div style={{ display: 'flex', gap: 10 }}>
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Nom du club" style={inputStyle} />
-            <input value={cityInput} onChange={(e) => setCityInput(e.target.value)} placeholder="Ville ou région" style={inputStyle} />
+            <SearchField icon="search" value={q} onChange={setQ} placeholder="Nom du club" />
+            <SearchField icon="pin" value={cityInput} onChange={setCityInput} placeholder="Ville ou région" />
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
             <button onClick={() => setSport('')} style={chipBtn(th, sport === '')}>Tous</button>
@@ -220,4 +218,37 @@ function chipBtn(th: ReturnType<typeof useTheme>['th'], active: boolean): React.
     background: active ? th.ink : th.surface2,
     color: active ? (th.mode === 'floodlit' ? th.text : '#f7f5ee') : th.textMute,
   };
+}
+
+// Champ de recherche en pilule (icône insérée + croix d'effacement) — remplace l'ancien input
+// brut sans icône (« très moche » : rectangle plat, aucun affordance de recherche).
+function SearchField({ icon, value, onChange, placeholder }: {
+  icon: 'search' | 'pin'; value: string; onChange: (v: string) => void; placeholder: string;
+}) {
+  const { th } = useTheme();
+  return (
+    <div style={{ position: 'relative', flex: 1, minWidth: 0 }}>
+      <Icon name={icon} size={16} color={th.textFaint} style={{
+        position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none',
+      }} />
+      <input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        style={{
+          width: '100%', height: 46, padding: `0 ${value ? 38 : 14}px 0 40px`, borderRadius: 999,
+          background: th.surface, color: th.text, border: 'none', boxShadow: `inset 0 0 0 1.5px ${th.line}`,
+          fontFamily: th.fontUI, fontSize: 15,
+        }}
+      />
+      {value && (
+        <button type="button" aria-label={`Effacer « ${placeholder} »`} onClick={() => onChange('')} style={{
+          position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
+          border: 'none', cursor: 'pointer', background: th.surface2, color: th.textMute,
+          width: 24, height: 24, borderRadius: 999, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 12, fontWeight: 700, lineHeight: 1, WebkitTapHighlightColor: 'transparent',
+        }}>✕</button>
+      )}
+    </div>
+  );
 }

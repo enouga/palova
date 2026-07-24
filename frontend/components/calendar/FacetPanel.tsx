@@ -11,8 +11,6 @@ import { TournamentGender } from '@/lib/api';
 const GENDER_LABEL: Record<string, string> = { MEN: 'Messieurs', WOMEN: 'Dames', MIXED: 'Mixte' };
 const DEPT_VISIBLE = 8; // nombre de départements montrés avant « + tous »
 
-type Th = ReturnType<typeof useTheme>['th'];
-
 export interface FacetPanelProps {
   facets: ReturnType<typeof calendarFacets>;
   state: CalendarFilterState;
@@ -71,8 +69,13 @@ export function FacetPanel({ facets, state, onToggleDept, onToggleCategory, onTo
               <FacetChip key={d.code} label={d.name} tint={FILTER_TINTS.ou} count={d.count} active={state.deptCodes.has(d.code)} onClick={() => onToggleDept(d.code)} />
             ))}
             {facets.departments.length > DEPT_VISIBLE && (
-              <button onClick={() => setShowAllDepts((v) => !v)} style={linkBtn(th)}>
-                {showAllDepts ? 'voir moins' : `+ ${facets.departments.length - DEPT_VISIBLE}`}
+              <button onClick={() => setShowAllDepts((v) => !v)} style={{
+                display: 'inline-flex', alignItems: 'center', border: 'none', cursor: 'pointer',
+                borderRadius: 999, padding: '5px 11px', fontFamily: th.fontUI, fontSize: 13, fontWeight: 600,
+                background: 'transparent', color: th.textMute, boxShadow: `inset 0 0 0 1px ${th.line}`,
+                WebkitTapHighlightColor: 'transparent',
+              }}>
+                {showAllDepts ? 'Voir moins' : `+ ${facets.departments.length - DEPT_VISIBLE}`}
               </button>
             )}
           </FacetGroup>
@@ -109,8 +112,4 @@ export function FacetPanel({ facets, state, onToggleDept, onToggleCategory, onTo
       </div>
     </div>
   );
-}
-
-function linkBtn(th: Th): React.CSSProperties {
-  return { border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.textFaint, padding: '5px 8px' };
 }

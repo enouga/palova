@@ -22,13 +22,14 @@ export function DiscoverAnchors({ items, active, onJump }: {
               style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                 border: 'none', cursor: 'pointer', borderRadius: 999, padding: '9px 6px',
                 fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 700, whiteSpace: 'nowrap',
-                background: isActive ? th.surface : 'transparent',
-                color: isActive ? th.text : th.textMute,
-                boxShadow: isActive ? th.shadowSoft : 'none' }}>
+                background: isActive ? th.accent : 'transparent',
+                color: isActive ? th.onAccent : th.textMute,
+                boxShadow: isActive ? th.shadowSoft : 'none', transition: 'background .15s, color .15s' }}>
               {it.label}
               {it.count != null && (
                 <span style={{ fontSize: 11, fontWeight: 700, borderRadius: 999, padding: '1px 7px',
-                  background: isActive ? `${th.accent}26` : th.surface, color: th.textMute }}>{it.count}</span>
+                  background: isActive ? 'rgba(255,255,255,.3)' : th.surface,
+                  color: isActive ? th.onAccent : th.textMute }}>{it.count}</span>
               )}
             </button>
           );

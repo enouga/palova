@@ -216,7 +216,7 @@ export function DiscoverClient() {
               onClear={() => { setLocInput(''); setCoords(null); setGeoState('idle'); }}
               extra={myClubsChipVisible && (
                 <button type="button" onClick={() => setMineOnly((v) => !v)} aria-pressed={mineOnly}
-                  aria-label="Mes clubs" title="Mes clubs" style={{
+                  aria-label="Mes clubs" title="Filtrer sur ses clubs" style={{
                     flexShrink: 0, border: 'none', cursor: 'pointer', width: 42, height: 42, borderRadius: 999,
                     background: mineOnly ? ACCENTS.blue : '#eef1f6',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
