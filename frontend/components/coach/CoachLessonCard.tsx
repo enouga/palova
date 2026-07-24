@@ -2,11 +2,13 @@
 import { useTheme } from '@/lib/ThemeProvider';
 import { ACCENTS } from '@/lib/theme';
 import { Avatar } from '@/components/ui/Avatar';
+import { CardStripe } from '@/components/ui/atoms';
 import { Icon } from '@/components/ui/Icon';
 import { AgendaCardHeader } from '@/components/agenda/AgendaCardHeader';
 import { colorForSeed } from '@/lib/playerColors';
 import { formatDateShortTimeRange, heroPlacesLabel } from '@/lib/tournament';
 import { lessonKindLabel, fillRatioLesson, type LessonKind } from '@/lib/lessons';
+import { cardStyle } from '@/components/clubhouse/SectionHeader';
 import type { CoachLessonRow } from '@/lib/api';
 
 /** « 3 / 4 élèves · 1 en attente » — la capacité d'un cours est toujours connue. */
@@ -37,7 +39,8 @@ export function CoachLessonCard({ lesson, tz, now, editable, onAddStudent, onRem
   const urgent = heroPlacesLabel(lesson.confirmedCount, lesson.capacity)?.urgent ?? false;
 
   return (
-    <div style={{ background: th.surface, borderRadius: 16, padding: '14px 16px', boxShadow: `inset 0 0 0 1px ${th.line}` }}>
+    <div style={{ position: 'relative', overflow: 'hidden', ...cardStyle(th), padding: '14px 16px 14px 19px' }}>
+      <CardStripe color={ACCENTS.blue} />
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 13 }}>
         <AgendaCardHeader
           icon="whistle"
