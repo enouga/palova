@@ -29,7 +29,7 @@ jest.mock('../lib/api', () => ({
 const { api } = require('../lib/api') as { api: Record<string, jest.Mock> };
 
 const profile = {
-  id: 'u1', email: 'eric@palova.fr', firstName: 'Eric', lastName: 'Nougayrede', phone: '0609032635', sex: 'MALE',
+  id: 'u1', email: 'eric@palova.fr', firstName: 'Eric', lastName: 'Nougayrede', pseudo: null, phone: '0609032635', sex: 'MALE',
   birthDate: '1973-07-08T00:00:00.000Z', avatarUrl: null, locale: 'fr', isSuperAdmin: false, showInLeaderboard: false,
   autoMatchProposals: false, acceptsFriendRequests: false, acceptsDirectMessages: true, preferredSport: null,
 };
@@ -122,6 +122,33 @@ describe('Page Mon profil — onglets + SaveBar', () => {
       expect.objectContaining({ phone: '0700000000', sex: 'MALE', birthDate: '1973-07-08' }), 'abc',
     ));
     expect(await screen.findByText('Enregistré ✓')).toBeInTheDocument();
+  });
+
+  it('onglet Identité : édite le pseudo et l’enregistre', async () => {
+    wrap();
+    const pseudo = await screen.findByLabelText('Pseudo');
+    expect(pseudo).toHaveValue('');
+    fireEvent.change(pseudo, { target: { value: 'SmashMaster' } });
+    expect(screen.getByText('Modifications non enregistrées')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+    await waitFor(() => expect(api.updateMyProfile).toHaveBeenCalledWith(
+      expect.objectContaining({ pseudo: 'SmashMaster' }), 'abc',
+    ));
+    expect(await screen.findByText('Enregistré ✓')).toBeInTheDocument();
+  });
+
+  it('onglet Identité : affiche le pseudo existant, préremplit le champ', async () => {
+    api.getMyProfile.mockResolvedValue({ ...profile, pseudo: 'DejaLa' });
+    wrap();
+    expect(await screen.findByLabelText('Pseudo')).toHaveValue('DejaLa');
+  });
+
+  it('onglet Identité : une erreur serveur (pseudo déjà pris) s’affiche dans la barre', async () => {
+    api.updateMyProfile.mockRejectedValue(new Error('Ce pseudo est déjà pris.'));
+    wrap();
+    fireEvent.change(await screen.findByLabelText('Pseudo'), { target: { value: 'SmashMaster' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Ce pseudo est déjà pris.');
   });
 
   it('les préférences sont différées : aucun appel réseau avant Enregistrer', async () => {

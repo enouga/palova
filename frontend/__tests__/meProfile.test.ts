@@ -2,7 +2,7 @@ import { PROFILE_TABS, parseProfileTab, buildProfileBody, isDirty, licenceDirty,
 import type { MyProfile } from '../lib/api';
 
 const base: MyProfile = {
-  id: 'u1', email: 'eric@palova.fr', firstName: 'Eric', lastName: 'Nougayrede',
+  id: 'u1', email: 'eric@palova.fr', firstName: 'Eric', lastName: 'Nougayrede', pseudo: null,
   phone: '0609032635', sex: 'MALE', birthDate: '1973-07-08T00:00:00.000Z',
   avatarUrl: null, locale: 'fr', isSuperAdmin: false,
   showInLeaderboard: false, autoMatchProposals: false,
@@ -27,10 +27,10 @@ describe('meProfile helpers', () => {
     expect(parseProfileTab('?tab=nimportequoi')).toBe('identite');
   });
 
-  it('buildProfileBody expose les 12 champs enregistrés', () => {
+  it('buildProfileBody expose les 13 champs enregistrés', () => {
     expect(Object.keys(buildProfileBody(base)).sort()).toEqual([
       'acceptsDirectMessages', 'acceptsFriendRequests', 'address', 'autoMatchProposals',
-      'birthDate', 'city', 'locale', 'phone', 'postalCode', 'preferredSportId', 'sex', 'showInLeaderboard',
+      'birthDate', 'city', 'locale', 'phone', 'postalCode', 'preferredSportId', 'pseudo', 'sex', 'showInLeaderboard',
     ]);
   });
 
@@ -47,6 +47,12 @@ describe('meProfile helpers', () => {
   it('buildProfileBody trim le téléphone, vide → null', () => {
     expect(buildProfileBody({ ...base, phone: '  06 09  ' }).phone).toBe('06 09');
     expect(buildProfileBody({ ...base, phone: '   ' }).phone).toBeNull();
+  });
+
+  it('buildProfileBody trim le pseudo, vide → null', () => {
+    expect(buildProfileBody({ ...base, pseudo: '  SmashMaster  ' }).pseudo).toBe('SmashMaster');
+    expect(buildProfileBody({ ...base, pseudo: '   ' }).pseudo).toBeNull();
+    expect(buildProfileBody({ ...base, pseudo: null }).pseudo).toBeNull();
   });
 
   it('buildProfileBody porte adresse/CP/ville (trim, vide → null)', () => {
@@ -77,6 +83,7 @@ describe('meProfile helpers', () => {
     expect(isDirty(base, { ...base, address: '1 av. du Club' })).toBe(true);
     expect(isDirty(base, { ...base, postalCode: '31000' })).toBe(true);
     expect(isDirty(base, { ...base, city: 'Toulouse' })).toBe(true);
+    expect(isDirty(base, { ...base, pseudo: 'SmashMaster' })).toBe(true);
   });
 
   it('isDirty ignore les champs NON enregistrés (avatar)', () => {

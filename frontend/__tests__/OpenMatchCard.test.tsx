@@ -15,6 +15,8 @@ jest.mock('../lib/api', () => ({
     searchClubMembers: jest.fn().mockResolvedValue([]),
     getMyProfile: jest.fn().mockResolvedValue({ firstName: 'Test', lastName: 'User', email: 't@t.fr', avatarUrl: null }),
     setOpenMatchTeams: jest.fn().mockResolvedValue({ id: 'r1' }),
+    // AddPlayerSheet embarque FriendsQuickRow, qui appelle listClubFriends dès le montage.
+    listClubFriends: jest.fn().mockResolvedValue([]),
   },
 }));
 
@@ -292,5 +294,32 @@ describe('OpenMatchCard', () => {
       text: expect.stringContaining('place'),
     })));
     delete (navigator as { share?: unknown }).share;
+  });
+
+  it('affiche le pseudo d’un joueur dans le mini-terrain quand renseigné', () => {
+    const match = makeMatch({
+      players: [{ userId: 'u-org', firstName: 'Org', lastName: 'A', avatarUrl: null, isOrganizer: true, team: 1 as (1 | 2), pseudo: 'SmashMaster' }],
+    });
+    render(<ThemeProvider><OpenMatchCard {...makeProps(match)} /></ThemeProvider>);
+    expect(screen.getByText('SmashMaster')).toBeInTheDocument();
+    expect(screen.queryByText('Org A')).not.toBeInTheDocument();
+  });
+
+  it('feuille « Remplacer » : l’en-tête utilise le pseudo du joueur remplacé', () => {
+    const match = makeMatch({
+      viewerIsOrganizer: true, viewerIsParticipant: true, spotsLeft: 0, full: true,
+      players: [
+        { userId: 'u-org', firstName: 'Org', lastName: 'A', avatarUrl: null, isOrganizer: true, team: 1 as (1 | 2) },
+        { userId: 'u-bob', firstName: 'Bob', lastName: 'B', avatarUrl: null, isOrganizer: false, team: 1 as (1 | 2), pseudo: 'SmashMaster' },
+        { userId: 'u-cara', firstName: 'Cara', lastName: 'C', avatarUrl: null, isOrganizer: false, team: 2 as (1 | 2) },
+        { userId: 'u-dan', firstName: 'Dan', lastName: 'D', avatarUrl: null, isOrganizer: false, team: 2 as (1 | 2) },
+      ],
+    });
+    // addingOpen doit être vrai dès le départ : dans ce test isolé, rien ne relève le
+    // prop en réponse à onToggleAdd (c'est le parent — OpenMatches — qui fait ça en vrai).
+    render(<ThemeProvider><OpenMatchCard {...makeProps(match, { addingOpen: true })} /></ThemeProvider>);
+    fireEvent.click(screen.getByRole('button', { name: 'Modifier SmashMaster' }));
+    fireEvent.click(screen.getByRole('button', { name: /Remplacer par un autre joueur/ }));
+    expect(screen.getByRole('dialog', { name: 'Remplacer SmashMaster' })).toBeInTheDocument();
   });
 });

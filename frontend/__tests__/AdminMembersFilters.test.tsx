@@ -2,7 +2,8 @@ import { render, screen, fireEvent, waitFor, within } from '@testing-library/rea
 import AdminMembersPage from '../app/admin/members/page';
 import { ThemeProvider } from '../lib/ThemeProvider';
 
-jest.mock('next/navigation', () => ({ useRouter: () => ({ push: jest.fn(), back: jest.fn() }) }));
+const pushMock = jest.fn();
+jest.mock('next/navigation', () => ({ useRouter: () => ({ push: pushMock, back: jest.fn() }) }));
 jest.mock('../lib/useAuth', () => ({ useAuth: () => ({ token: 'tok', ready: true }) }));
 jest.mock('../lib/ClubProvider', () => ({ useClub: () => ({ club: { id: 'club-1' } }) }));
 jest.mock('../lib/api', () => ({
@@ -35,6 +36,7 @@ const plans = [
 
 beforeEach(() => {
   jest.clearAllMocks();
+  pushMock.mockClear();
   (api.adminGetMembers as jest.Mock).mockResolvedValue(members);
   (api.getMyClubs as jest.Mock).mockResolvedValue([{ clubId: 'club-1', slug: 'c', name: 'Club', role: 'ADMIN' }]);
   (api.getMyProfile as jest.Mock).mockResolvedValue({ id: 'u-viewer' });
@@ -163,4 +165,37 @@ it('?plan=<id> ouvre le contexte Abonnés pré-filtré sur le forfait', async ()
   expect(screen.getByText('Ana Bernard')).toBeInTheDocument();
   expect(screen.queryByText('Zoé Diaz')).toBeNull();
   window.history.replaceState({}, '', '/admin/members');
+});
+
+it('cocher des membres fait apparaître la barre « N sélectionnés » et navigue vers le composer', async () => {
+  mount();
+  await screen.findByText('Ana Bernard');
+  const boxes = await screen.findAllByRole('checkbox', { name: /Sélectionner/ });
+  fireEvent.click(boxes[0]);
+  fireEvent.click(boxes[1]);
+  expect(screen.getByText('2 sélectionnés')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: /Envoyer un message/ }));
+  expect(JSON.parse(sessionStorage.getItem('palova:broadcast-recipients') ?? 'null')).toHaveLength(2);
+  expect(pushMock).toHaveBeenCalledWith('/admin/broadcast');
+});
+
+it('« Tout sélectionner » coche les membres visibles du filtre courant', async () => {
+  mount();
+  fireEvent.click(await screen.findByRole('checkbox', { name: /Tout sélectionner/ }));
+  expect(screen.getByText(/sélectionnés/)).toBeInTheDocument();
+});
+
+it('changer de segment retire de la sélection les membres qui ne sont plus visibles', async () => {
+  mount();
+  await screen.findByText('Ana Bernard');
+  const boxes = await screen.findAllByRole('checkbox', { name: /Sélectionner/ });
+  // sélectionne Ana (abonnée) ET Zoé (bloquée) — 2 membres de segments différents
+  const anaBox = boxes.find((b) => b.getAttribute('aria-label')?.includes('Ana'))!;
+  const zoeBox = boxes.find((b) => b.getAttribute('aria-label')?.includes('Zoé'))!;
+  fireEvent.click(anaBox);
+  fireEvent.click(zoeBox);
+  expect(screen.getByText('2 sélectionnés')).toBeInTheDocument();
+  // bascule sur le segment « Abonnés » → Zoé (non abonnée) disparaît de `visible`
+  fireEvent.click(screen.getByRole('button', { name: 'Abonnés · 1' }));
+  await waitFor(() => expect(screen.getByText('1 sélectionné')).toBeInTheDocument());
 });

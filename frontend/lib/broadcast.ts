@@ -37,3 +37,22 @@ export function coupleChannels(c: BroadcastChannels): BroadcastChannels {
 export function hasAnyChannel(c: BroadcastChannels): boolean {
   return c.email || c.inApp;
 }
+
+export interface BroadcastRecipient { userId: string; name: string }
+export const BROADCAST_RECIPIENTS_KEY = 'palova:broadcast-recipients';
+
+/** Dépose la sélection de la liste des membres pour le composer (jamais l'URL — 200 ids n'y tiennent pas). */
+export function storePendingRecipients(list: BroadcastRecipient[]): void {
+  try { sessionStorage.setItem(BROADCAST_RECIPIENTS_KEY, JSON.stringify(list)); } catch { /* stockage plein/privé */ }
+}
+
+/** Lit ET consomme la sélection (one-shot : un refresh du composer ne re-cible pas par surprise). */
+export function readPendingRecipients(): BroadcastRecipient[] | null {
+  try {
+    const raw = sessionStorage.getItem(BROADCAST_RECIPIENTS_KEY);
+    if (!raw) return null;
+    sessionStorage.removeItem(BROADCAST_RECIPIENTS_KEY);
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : null;
+  } catch { return null; }
+}

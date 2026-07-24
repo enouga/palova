@@ -4,6 +4,7 @@ import path from 'path';
 import multer from 'multer';
 import bcrypt from 'bcrypt';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
+import { Prisma } from '@prisma/client';
 import { prisma } from '../db/prisma';
 import { ReservationService } from '../services/reservation.service';
 import { TournamentService } from '../services/tournament.service';
@@ -35,7 +36,7 @@ const matchService = new MatchService();
 
 // Champs du profil exposés au joueur (GET /profile, PATCH /, POST /avatar).
 const PROFILE_SELECT = {
-  id: true, email: true, firstName: true, lastName: true, phone: true, sex: true,
+  id: true, email: true, firstName: true, lastName: true, pseudo: true, phone: true, sex: true,
   birthDate: true, avatarUrl: true, address: true, postalCode: true, city: true,
   locale: true, isSuperAdmin: true, showInLeaderboard: true,
   autoMatchProposals: true, acceptsFriendRequests: true, acceptsDirectMessages: true,
@@ -134,12 +135,33 @@ router.post('/legal/accept', authMiddleware, async (req: AuthRequest, res: Respo
 // Mise à jour du profil : téléphone, sexe, date de naissance, langue.
 router.patch('/', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const { phone, sex, birthDate, locale, showInLeaderboard, autoMatchProposals, acceptsFriendRequests, acceptsDirectMessages, preferredSportId, address, postalCode, city } = req.body;
-    const data: { phone?: string | null; sex?: 'MALE' | 'FEMALE' | null; birthDate?: Date | null; locale?: string | null; showInLeaderboard?: boolean; autoMatchProposals?: boolean; acceptsFriendRequests?: boolean; acceptsDirectMessages?: boolean; preferredSportId?: string | null; address?: string | null; postalCode?: string | null; city?: string | null } = {};
+    const { phone, sex, birthDate, locale, showInLeaderboard, autoMatchProposals, acceptsFriendRequests, acceptsDirectMessages, preferredSportId, address, postalCode, city, pseudo } = req.body;
+    const data: { phone?: string | null; sex?: 'MALE' | 'FEMALE' | null; birthDate?: Date | null; locale?: string | null; showInLeaderboard?: boolean; autoMatchProposals?: boolean; acceptsFriendRequests?: boolean; acceptsDirectMessages?: boolean; preferredSportId?: string | null; address?: string | null; postalCode?: string | null; city?: string | null; pseudo?: string | null } = {};
     if (phone !== undefined) data.phone = typeof phone === 'string' && phone.trim() ? phone.trim() : null;
     if (address !== undefined) data.address = typeof address === 'string' && address.trim() ? address.trim() : null;
     if (postalCode !== undefined) data.postalCode = typeof postalCode === 'string' && postalCode.trim() ? postalCode.trim() : null;
     if (city !== undefined) data.city = typeof city === 'string' && city.trim() ? city.trim() : null;
+    if (pseudo !== undefined) {
+      if (pseudo === null) {
+        data.pseudo = null;
+      } else if (typeof pseudo !== 'string') {
+        return void res.status(400).json({ error: 'pseudo invalide' });
+      } else {
+        const trimmed = pseudo.trim();
+        if (!trimmed) {
+          data.pseudo = null;
+        } else if (!/^[A-Za-z0-9_-]{3,20}$/.test(trimmed)) {
+          return void res.status(400).json({ error: 'Le pseudo doit contenir 3 à 20 caractères (lettres, chiffres, - ou _), sans espace ni accent.' });
+        } else {
+          const conflict = await prisma.user.findFirst({
+            where: { pseudo: { equals: trimmed, mode: 'insensitive' }, NOT: { id: req.user!.id } },
+            select: { id: true },
+          });
+          if (conflict) return void res.status(409).json({ error: 'Ce pseudo est déjà pris.' });
+          data.pseudo = trimmed;
+        }
+      }
+    }
     if (sex !== undefined) {
       if (sex !== null && sex !== 'MALE' && sex !== 'FEMALE') return void res.status(400).json({ error: 'sex invalide' });
       data.sex = sex;
@@ -187,7 +209,12 @@ router.patch('/', authMiddleware, async (req: AuthRequest, res: Response, next: 
     }
     const user = await prisma.user.update({ where: { id: req.user!.id }, data, select: PROFILE_SELECT });
     res.json(user);
-  } catch (err) { next(err); }
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+      return void res.status(409).json({ error: 'Ce pseudo est déjà pris.' });
+    }
+    next(err);
+  }
 });
 
 // Avatar : upload d'une photo (JPEG/PNG/WebP, 2 Mo max), remplace l'ancienne.

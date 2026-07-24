@@ -55,8 +55,8 @@ describe('BroadcastService', () => {
 
     it('stores plain text in body + rich HTML in bodyHtml, dispatches plain text per member', async () => {
       const members = [
-        { user: { id: 'u1', email: 'a@x.fr', firstName: 'Alice' } },
-        { user: { id: 'u2', email: null, firstName: 'Bob' } },
+        { user: { id: 'u1', email: 'a@x.fr', firstName: 'Alice', lastName: 'A' } },
+        { user: { id: 'u2', email: null, firstName: 'Bob', lastName: 'B' } },
       ];
       prismaMock.club.findUniqueOrThrow.mockResolvedValue(club as any);
       prismaMock.clubMembership.findMany.mockResolvedValue(members as any);
@@ -90,7 +90,7 @@ describe('BroadcastService', () => {
 
     it('sanitizes the HTML body: strips scripts, keeps /uploads images', async () => {
       prismaMock.club.findUniqueOrThrow.mockResolvedValue(club as any);
-      prismaMock.clubMembership.findMany.mockResolvedValue([{ user: { id: 'u1', email: 'a@x.fr', firstName: 'A' } }] as any);
+      prismaMock.clubMembership.findMany.mockResolvedValue([{ user: { id: 'u1', email: 'a@x.fr', firstName: 'A', lastName: 'A' } }] as any);
       prismaMock.clubBroadcast.create.mockResolvedValue({ id: 'bc-2' } as any);
       prismaMock.notificationPreference.count.mockResolvedValue(0);
 
@@ -106,7 +106,7 @@ describe('BroadcastService', () => {
 
     it('email seul : dispatch avec email + plafond email seul, cloche/push coupés', async () => {
       prismaMock.club.findUniqueOrThrow.mockResolvedValue(club as any);
-      prismaMock.clubMembership.findMany.mockResolvedValue([{ user: { id: 'u1', email: 'a@x.fr', firstName: 'A' } }] as any);
+      prismaMock.clubMembership.findMany.mockResolvedValue([{ user: { id: 'u1', email: 'a@x.fr', firstName: 'A', lastName: 'A' } }] as any);
       prismaMock.clubBroadcast.create.mockResolvedValue({ id: 'bc' } as any);
       prismaMock.notificationPreference.count.mockResolvedValue(0);
 
@@ -120,7 +120,7 @@ describe('BroadcastService', () => {
 
     it('cloche seule : aucun email construit (email=null), plafond email false', async () => {
       prismaMock.club.findUniqueOrThrow.mockResolvedValue(club as any);
-      prismaMock.clubMembership.findMany.mockResolvedValue([{ user: { id: 'u1', email: 'a@x.fr', firstName: 'A' } }] as any);
+      prismaMock.clubMembership.findMany.mockResolvedValue([{ user: { id: 'u1', email: 'a@x.fr', firstName: 'A', lastName: 'A' } }] as any);
       prismaMock.clubBroadcast.create.mockResolvedValue({ id: 'bc' } as any);
       prismaMock.notificationPreference.count.mockResolvedValue(0);
 
@@ -158,6 +158,179 @@ describe('BroadcastService', () => {
       expect(out.html).toContain('world');
       expect(prismaMock.clubBroadcast.create).not.toHaveBeenCalled();
       expect(dispatch).not.toHaveBeenCalled();
+    });
+  });
+});
+
+describe('BroadcastService — envoi ciblé', () => {
+  beforeEach(() => {
+    dispatch.mockReset();
+    dispatch.mockResolvedValue(undefined);
+    const club = {
+      name: 'Padel Arena', slug: 'padel-arena', logoUrl: null, accentColor: '#1a2b3c',
+    };
+    prismaMock.club.findUniqueOrThrow.mockResolvedValue(club as any);
+    prismaMock.clubBroadcast.create.mockResolvedValue({ id: 'bc-target' } as any);
+    prismaMock.notificationPreference.count.mockResolvedValue(0);
+    (prismaMock.clubBroadcastRecipient.createMany as jest.Mock).mockResolvedValue({ count: 0 });
+    prismaMock.clubMembership.findMany.mockResolvedValue(
+      [{ user: { id: 'u1', email: 'a@a.fr', firstName: 'A', lastName: 'A' } }] as any,
+    );
+  });
+
+  it('recipientUserIds : intersecté avec les adhésions ACTIVES du club', async () => {
+    await new BroadcastService().send('club-demo', 'staff-1', {
+      title: 'Hello', bodyHtml: '<p>corps</p>', recipientUserIds: ['u1', 'u-hors-club'],
+    });
+    expect(prismaMock.clubMembership.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ clubId: 'club-demo', status: 'ACTIVE', userId: { in: ['u1', 'u-hors-club'] } }),
+    }));
+  });
+
+  it('liste ciblée vide après intersection → VALIDATION_ERROR', async () => {
+    (prismaMock.clubMembership.findMany as jest.Mock).mockResolvedValue([]);
+    await expect(new BroadcastService().send('club-demo', 'staff-1', {
+      title: 'Hello', bodyHtml: '<p>x</p>', recipientUserIds: ['u-fantome'],
+    })).rejects.toThrow('VALIDATION_ERROR');
+  });
+
+  it('COMMERCIAL : catégorie CLUB_OFFERS au dispatch + lien de désinscription &cat=offers', async () => {
+    await new BroadcastService().send('club-demo', 'staff-1', {
+      title: 'Promo', bodyHtml: '<p>-20%</p>', kind: 'COMMERCIAL',
+    });
+    expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({ category: 'CLUB_OFFERS' }));
+    const emailArg = (dispatch as jest.Mock).mock.calls[0][0].email;
+    expect(emailArg.html).toContain('cat=offers');
+  });
+
+  it('INFO (défaut) : catégorie CLUB_MESSAGES inchangée, pas de cat sur le lien', async () => {
+    await new BroadcastService().send('club-demo', 'staff-1', { title: 'Info', bodyHtml: '<p>x</p>' });
+    expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({ category: 'CLUB_MESSAGES' }));
+  });
+
+  it('substitue {{prenom}}/{{nom}} par destinataire (titre + corps + notif)', async () => {
+    (prismaMock.clubMembership.findMany as jest.Mock).mockResolvedValue([
+      { user: { id: 'u1', email: 'a@a.fr', firstName: 'Ines', lastName: 'Andre' } },
+    ]);
+    await new BroadcastService().send('club-demo', 'staff-1', {
+      title: 'Coucou {{prenom}}', bodyHtml: '<p>Bonjour {{prenom}} {{nom}}</p>',
+    });
+    const call = (dispatch as jest.Mock).mock.calls[0][0];
+    expect(call.title).toBe('Coucou Ines');
+    expect(call.body).toContain('Bonjour Ines Andre');
+    expect(call.email.html).toContain('Ines');
+  });
+
+  it('persiste kind + une ligne destinataire par membre visé', async () => {
+    (prismaMock.clubMembership.findMany as jest.Mock).mockResolvedValue([
+      { user: { id: 'u1', email: 'a@a.fr', firstName: 'A', lastName: 'A' } },
+      { user: { id: 'u2', email: 'b@b.fr', firstName: 'B', lastName: 'B' } },
+    ]);
+    await new BroadcastService().send('club-demo', 'staff-1', { title: 'T', bodyHtml: '<p>x</p>', kind: 'COMMERCIAL' });
+    expect(prismaMock.clubBroadcast.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ kind: 'COMMERCIAL', recipientCount: 2 }),
+    }));
+    expect(prismaMock.clubBroadcastRecipient.createMany).toHaveBeenCalledWith({
+      data: [{ broadcastId: expect.any(String), userId: 'u1' }, { broadcastId: expect.any(String), userId: 'u2' }],
+      skipDuplicates: true,
+    });
+  });
+});
+
+describe('BroadcastService — audience', () => {
+  let service: BroadcastService;
+
+  beforeEach(() => {
+    service = new BroadcastService();
+  });
+
+  it('compte email/cloche/exclus pour un envoi COMMERCIAL', async () => {
+    (prismaMock.clubMembership.findMany as jest.Mock).mockResolvedValue([
+      { userId: 'u1' }, { userId: 'u2' }, { userId: 'u3' },
+    ]);
+    (prismaMock.notificationPreference.findMany as jest.Mock).mockResolvedValue([
+      { userId: 'u2', channel: 'EMAIL' },
+      { userId: 'u3', channel: 'EMAIL' },
+      { userId: 'u3', channel: 'INAPP' },
+    ]);
+
+    const result = await service.audience('club-demo', { kind: 'COMMERCIAL' });
+
+    expect(result).toEqual({ total: 3, email: 1, inApp: 2, excluded: 1 });
+    expect(prismaMock.clubMembership.findMany).toHaveBeenCalledWith({
+      where: { clubId: 'club-demo', status: 'ACTIVE' },
+      select: { userId: true },
+    });
+    expect(prismaMock.notificationPreference.findMany).toHaveBeenCalledWith({
+      where: { userId: { in: ['u1', 'u2', 'u3'] }, category: 'CLUB_OFFERS', enabled: false, channel: { in: ['EMAIL', 'INAPP'] } },
+      select: { userId: true, channel: true },
+    });
+  });
+
+  it('INFO (défaut) : la cloche CLUB_MESSAGES est verrouillée ON, jamais comptée comme coupée', async () => {
+    (prismaMock.clubMembership.findMany as jest.Mock).mockResolvedValue([
+      { userId: 'u1' }, { userId: 'u2' },
+    ]);
+    // Même si un opt-out INAPP existait en base pour CLUB_MESSAGES (ne devrait jamais arriver
+    // pour ce canal verrouillé), audience() ne doit jamais le compter comme "off".
+    (prismaMock.notificationPreference.findMany as jest.Mock).mockResolvedValue([
+      { userId: 'u2', channel: 'INAPP' },
+    ]);
+
+    const result = await service.audience('club-demo', { kind: 'INFO' });
+
+    expect(result).toEqual({ total: 2, email: 2, inApp: 2, excluded: 0 });
+    expect(prismaMock.notificationPreference.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ category: 'CLUB_MESSAGES' }),
+    }));
+  });
+
+  it('ciblage recipientUserIds : intersecté avec les adhésions ACTIVES du club', async () => {
+    (prismaMock.clubMembership.findMany as jest.Mock).mockResolvedValue([{ userId: 'u1' }]);
+    (prismaMock.notificationPreference.findMany as jest.Mock).mockResolvedValue([]);
+
+    await service.audience('club-demo', { recipientUserIds: ['u1', 'u-hors-club'], kind: 'INFO' });
+
+    expect(prismaMock.clubMembership.findMany).toHaveBeenCalledWith({
+      where: { clubId: 'club-demo', status: 'ACTIVE', userId: { in: ['u1', 'u-hors-club'] } },
+      select: { userId: true },
+    });
+  });
+
+  it('aucun membre actif → { total:0, email:0, inApp:0, excluded:0 } sans appeler notificationPreference', async () => {
+    (prismaMock.clubMembership.findMany as jest.Mock).mockResolvedValue([]);
+
+    const result = await service.audience('club-demo', {});
+
+    expect(result).toEqual({ total: 0, email: 0, inApp: 0, excluded: 0 });
+    expect(prismaMock.notificationPreference.findMany).not.toHaveBeenCalled();
+  });
+});
+
+describe('BroadcastService — receivedBy', () => {
+  let service: BroadcastService;
+
+  beforeEach(() => {
+    service = new BroadcastService();
+  });
+
+  it('renvoie les diffusions reçues par le membre, du club, triées par date décroissante', async () => {
+    (prismaMock.clubBroadcastRecipient.findMany as jest.Mock).mockResolvedValue([
+      { broadcast: { id: 'b2', title: 'Récent', kind: 'INFO', createdAt: new Date('2026-07-21') } },
+      { broadcast: { id: 'b1', title: 'Ancien', kind: 'COMMERCIAL', createdAt: new Date('2026-07-01') } },
+    ]);
+
+    const result = await service.receivedBy('club-demo', 'u1');
+
+    expect(result).toEqual([
+      { id: 'b2', title: 'Récent', kind: 'INFO', createdAt: new Date('2026-07-21') },
+      { id: 'b1', title: 'Ancien', kind: 'COMMERCIAL', createdAt: new Date('2026-07-01') },
+    ]);
+    expect(prismaMock.clubBroadcastRecipient.findMany).toHaveBeenCalledWith({
+      where: { userId: 'u1', broadcast: { clubId: 'club-demo' } },
+      orderBy: { broadcast: { createdAt: 'desc' } },
+      take: 10,
+      select: { broadcast: { select: { id: true, title: true, kind: true, createdAt: true } } },
     });
   });
 });

@@ -27,6 +27,7 @@ import { PaymentMethodChart } from '@/components/admin/stats/PaymentMethodChart'
 import { PackageBalanceDialog } from '@/components/admin/members/PackageBalanceDialog';
 import { MemberProfileCard } from '@/components/admin/members/MemberProfileCard';
 import { MemberAccessCard } from '@/components/admin/members/MemberAccessCard';
+import { MemberContactCard, type MemberBroadcastRow } from '@/components/admin/members/MemberContactCard';
 import { MemberWalletCard } from '@/components/admin/members/MemberWalletCard';
 import { MemberReservationsCard } from '@/components/admin/members/MemberReservationsCard';
 import { MemberUpcomingCard, MemberPaymentsCard, MemberLoyaltyCard } from '@/components/admin/members/MemberOverviewCards';
@@ -137,6 +138,9 @@ export default function MemberHistoryPage() {
   const [data, setData] = useState<MemberHistory | null>(null);
   const [notes, setNotes] = useState<MemberNote[]>([]);
   const [levelData, setLevelData] = useState<AdminMemberLevel | null>(null);
+  // Diffusions déjà reçues par ce membre (carte « Messages ») — tolérant à l'échec, comme
+  // le reste du Promise.all ci-dessous.
+  const [received, setReceived] = useState<MemberBroadcastRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   // Erreur de chargement initial (page-level, voir ci-dessous) vs erreur d'une mutation
@@ -184,7 +188,7 @@ export default function MemberHistoryPage() {
     if (loadedForRef.current !== userId) setLoading(true);
     try {
       setError(null);
-      const [h, n, lvl] = await Promise.all([
+      const [h, n, lvl, bc] = await Promise.all([
         api.adminGetMemberHistory(clubId, userId, token),
         api.adminGetMemberNotes(clubId, userId, token).catch(() => [] as MemberNote[]),
         // Niveau (override admin) — uniquement si le système de niveau est actif ET que le
@@ -192,9 +196,11 @@ export default function MemberHistoryPage() {
         levelEnabled && admin
           ? api.adminGetMemberLevel(clubId, userId, token).catch(() => null)
           : Promise.resolve(null),
+        // Diffusions déjà reçues (carte « Messages ») — tolérant à l'échec.
+        api.adminGetMemberBroadcasts(clubId, userId, token).catch(() => [] as MemberBroadcastRow[]),
       ]);
       if (reqId !== reqIdRef.current) return; // réponse périmée : un reload plus récent a pris la main
-      setData(h); setNotes(n); setLevelData(lvl); setWatch(h.member.watch);
+      setData(h); setNotes(n); setLevelData(lvl); setReceived(bc); setWatch(h.member.watch);
       loadedForRef.current = userId;
     } catch (e) {
       if (reqId !== reqIdRef.current) return;
@@ -413,9 +419,12 @@ export default function MemberHistoryPage() {
             onDelete={() => setConfirmRemove(true)}
           />
 
-          {/* Notes (commentaires staff) — reprend le contenu de l'ex-onglet Notes.
-              (Le contact email/tel vit dans le hero ; le bouton « Envoyer un message »
-              arrive avec la spec messages ciblés, hors périmètre ici.) */}
+          {/* Messages — dépose ce seul membre comme destinataire ciblé du composer de
+              diffusion (« Messages » /admin/broadcast) + historique des diffusions déjà
+              reçues. Le contact (email/tel) vit dans le hero, pas ici. */}
+          <MemberContactCard userId={m.userId} firstName={m.firstName} lastName={m.lastName} received={received} />
+
+          {/* Notes (commentaires staff) — reprend le contenu de l'ex-onglet Notes. */}
           <section aria-label="Notes du staff" style={memberCardStyle(th)}>
             <Kicker color={MEMBER_CARD_TINTS.teal}>Notes{notes.length ? ` · ${notes.length}` : ''}</Kicker>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 18 }}>
