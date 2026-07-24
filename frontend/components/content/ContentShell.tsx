@@ -9,12 +9,16 @@ export function ContentShell({ children }: { children: ReactNode }) {
   const { th } = useTheme();
   return (
     <div style={{ background: th.bg, color: th.text, fontFamily: th.fontUI }}>
-      <header style={{ maxWidth: 800, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 18px 4px' }}>
-        <Logotype size={22} />
+      {/* En-tête sur UNE ligne : le retour « Accueil » vit à côté du logo (même en-tête que
+          /decouvrir — avant, il occupait sa propre rangée et décalait tout le contenu). */}
+      <header style={{ maxWidth: 800, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '18px 18px 4px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+          <Logotype size={22} />
+          <BackButton href="/" label="Accueil" />
+        </div>
         <ThemeToggle />
       </header>
-      <main style={{ maxWidth: 800, margin: '0 auto', padding: '6px 18px 56px' }}>
-        <div style={{ margin: '6px 0 18px' }}><BackButton href="/" label="Accueil" /></div>
+      <main style={{ maxWidth: 800, margin: '0 auto', padding: '16px 18px 56px' }}>
         {children}
       </main>
     </div>
