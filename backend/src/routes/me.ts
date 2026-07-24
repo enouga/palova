@@ -22,6 +22,7 @@ import { FriendshipService } from '../services/friendship.service';
 import { MatchService } from '../services/match.service';
 import { legalService } from '../services/legal.service';
 import { walletService } from '../services/wallet.service';
+import { normalizePseudo, PSEUDO_FORMAT_ERROR, PSEUDO_TAKEN_ERROR } from '../services/pseudo';
 
 const router = Router();
 const reservationService = new ReservationService();
@@ -142,24 +143,13 @@ router.patch('/', authMiddleware, async (req: AuthRequest, res: Response, next: 
     if (postalCode !== undefined) data.postalCode = typeof postalCode === 'string' && postalCode.trim() ? postalCode.trim() : null;
     if (city !== undefined) data.city = typeof city === 'string' && city.trim() ? city.trim() : null;
     if (pseudo !== undefined) {
-      if (pseudo === null) {
-        data.pseudo = null;
-      } else if (typeof pseudo !== 'string') {
-        return void res.status(400).json({ error: 'pseudo invalide' });
-      } else {
-        const trimmed = pseudo.trim();
-        if (!trimmed) {
-          data.pseudo = null;
-        } else if (!/^[A-Za-z0-9_-]{3,20}$/.test(trimmed)) {
-          return void res.status(400).json({ error: 'Le pseudo doit contenir 3 à 20 caractères (lettres, chiffres, - ou _), sans espace ni accent.' });
-        } else {
-          const conflict = await prisma.user.findFirst({
-            where: { pseudo: { equals: trimmed, mode: 'insensitive' }, NOT: { id: req.user!.id } },
-            select: { id: true },
-          });
-          if (conflict) return void res.status(409).json({ error: 'Ce pseudo est déjà pris.' });
-          data.pseudo = trimmed;
-        }
+      try {
+        data.pseudo = await normalizePseudo(pseudo, req.user!.id);
+      } catch (e) {
+        const code = (e as Error).message;
+        if (code === 'PSEUDO_INVALID') return void res.status(400).json({ error: PSEUDO_FORMAT_ERROR });
+        if (code === 'PSEUDO_TAKEN') return void res.status(409).json({ error: PSEUDO_TAKEN_ERROR });
+        throw e;
       }
     }
     if (sex !== undefined) {
