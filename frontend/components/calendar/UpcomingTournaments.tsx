@@ -53,7 +53,7 @@ export function UpcomingTournaments({ items: preloaded, hideTitle }: { items?: N
             now={now}
             ratio={fillRatio(t)}
             places={tournamentPlacesLabel(t)}
-            extra={t.entryFee ? `${t.entryFee} €` : null}
+            price={t.entryFee ? `${t.entryFee} €` : null}
             sportLabel={showSport ? (t.sport?.name ?? null) : null}
             onClick={() => { window.location.href = clubUrl(t.club.slug, `/tournois/${t.id}`); }}
           />

@@ -163,7 +163,7 @@ export function EventsClient() {
                         now={now}
                         ratio={fillRatio(item.tournament)}
                         places={tournamentPlacesLabel(item.tournament)}
-                        extra={item.tournament.entryFee ? `${item.tournament.entryFee} €` : null}
+                        price={item.tournament.entryFee ? `${item.tournament.entryFee} €` : null}
                         sportLabel={multiSport ? (item.tournament.sport?.name ?? null) : null}
                         onClick={() => router.push(`/tournois/${item.tournament.id}`)}
                       />
@@ -182,7 +182,8 @@ export function EventsClient() {
                         now={now}
                         ratio={fillRatio({ confirmedCount: item.event.confirmedCount, maxTeams: item.event.capacity })}
                         places={eventPlacesLabel(item.event)}
-                        extra={[item.event.price != null && Number(item.event.price) > 0 ? `${Number(item.event.price)} €` : null, item.event.memberOnly ? 'Membres' : null].filter(Boolean).join(' · ') || null}
+                        price={item.event.price != null && Number(item.event.price) > 0 ? `${Number(item.event.price)} €` : null}
+                        extra={item.event.memberOnly ? 'Membres' : null}
                         sportLabel={multiSport ? (item.event.sport?.name ?? null) : null}
                         onClick={() => router.push(`/events/${item.event.id}`)}
                       />
